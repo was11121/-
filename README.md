@@ -29,6 +29,8 @@ python app.py
 - `cognitive_engine/`：Python fallback 与可选 C++ 动态库适配器
 - `adapters/`：Web/QQ 渠道适配说明和兼容层
 - `docs/ARCHITECTURE.md`：统一架构蓝图
+- `docs/MyAgentUnified-项目完全解读.docx`：面向零基础读者的完整说明
+- `docs/MyAgentUnified-前端控制台接口文档.docx`：控制台操作与 HTTP 接口映射
 - `tests/`：核心闭环测试
 
 ## 环境变量与模型配置
