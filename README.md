@@ -1,0 +1,55 @@
+# 现实补丁 Agent
+
+这是从 `MyAgent重构` 抽取出来的独立统一 Agent 骨架。原项目保持不变。本项目以本地隔离的反馈记忆为底座，统一 Web/QQ 入口，并提供 AI 图书馆、文档处理、AI 秘书、现实补丁和主动思维 Tip。
+
+## 快速运行
+
+### 方式一：双击一键启动（推荐）
+直接双击运行项目根目录下的 **`start.bat`**：
+- 自动检测 Python 环境与 `.env` 配置；
+- 启动全功能服务（含统一对话、现实补丁、文档知识库、用户记忆隔离等）；
+- 自动在默认浏览器打开前端交互控制台 (`http://127.0.0.1:8091/`)。
+
+### 方式二：命令行运行
+```powershell
+cd C:\Users\wby15\Desktop\文件\MyAgentUnified
+python app.py
+```
+
+默认监听 `http://127.0.0.1:8091`。没有配置 LLM 时使用本地 fallback responder，记忆、图书馆、秘书和 Tip 仍可完整验证。
+
+## 目录
+
+- `unified_agent/`：协议、统一 Agent Core 和响应提供器
+- `auth_runtime/`：登录注册、Bearer Token、角色权限（admin / user）
+- `memory_runtime/`：用户分区、反馈记忆、画像上下文
+- `library_runtime/`：文档解析、净化、索引、检索和引用
+- `secretary_runtime/`：项目秘书、现实补丁、审计和回滚
+- `tip_engine/`：换角度提示检测与冷却
+- `cognitive_engine/`：Python fallback 与可选 C++ 动态库适配器
+- `adapters/`：Web/QQ 渠道适配说明和兼容层
+- `docs/ARCHITECTURE.md`：统一架构蓝图
+- `tests/`：核心闭环测试
+
+## 环境变量与模型配置
+
+`MYAGENT_DATA_DIR` 控制数据目录，默认为项目下的 `data`。
+
+复制 `.env.example` 为 `.env` 后填写密钥。默认对接 **DeepSeek 官方 API**：
+- `MODEL_API_KEY`: 你的 API Key（不要提交到 Git）
+- `BASE_URL`: `https://api.deepseek.com`
+- `CURRENT_MODEL`: `deepseek-v4-flash`（或 `deepseek-chat`）
+
+未配置密钥或网络异常时，系统会降级到本地规则响应器，记忆、知识库与补丁流转仍可验证。
+
+可选 C++ 引擎：设置 `COGNITIVE_ENGINE_LIBRARY` 指向共享库；加载失败会自动回退到 Python。
+
+## 登录与数据隔离
+
+打开控制台后需先登录。记忆按用户落在独立 SQLite 文件 `data/users/<user_id>/memory.sqlite3`，账户与令牌存在 `data/auth.sqlite3`。
+
+默认账号：
+- 管理员 `admin` / `admin123`：可查看全部用户列表与个人画像
+- 普通用户 `alice` / `123456`、`bob` / `123456`：仅可使用助手功能并访问自身记忆
+
+请求头使用 `Authorization: Bearer <token>`。普通用户访问他人记忆或 `/v1/admin/*` 会返回 `403`。接口细节见 `API.md` 第 3.16、3.17 节。

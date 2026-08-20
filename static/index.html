@@ -1,0 +1,1392 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MyAgent Unified 控制台 - 现实补丁智能体</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome 图标 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <!-- Marked.js 用于 Markdown 渲染 -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    code, pre {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.6);
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(51, 65, 85, 0.8);
+      border-radius: 9999px;
+    }
+    .prose p { margin-bottom: 0.5rem; }
+    .prose ul { list-style-type: disc; margin-left: 1.25rem; margin-bottom: 0.5rem; }
+    .prose ol { list-style-type: decimal; margin-left: 1.25rem; margin-bottom: 0.5rem; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-indigo-500 selection:text-white">
+
+  <!-- 顶部导航栏 -->
+  <header class="bg-slate-900/80 backdrop-blur border-b border-slate-800 sticky top-0 z-50 px-6 py-3.5 flex items-center justify-between shadow-lg">
+    <div class="flex items-center space-x-3">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+        <i class="fa-solid fa-atom text-white text-lg"></i>
+      </div>
+      <div>
+        <h1 class="text-base font-bold tracking-tight text-white flex items-center space-x-2">
+          <span>MyAgent Unified</span>
+          <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">RealityPatch Core</span>
+        </h1>
+        <p class="text-xs text-slate-400">用户记忆 · 权威知识库 · 项目秘书 · 现实补丁</p>
+      </div>
+    </div>
+
+    <!-- 用户与工作区上下文切换 -->
+    <div class="flex items-center space-x-3">
+      <div id="authUserBar" class="hidden items-center bg-slate-800/80 rounded-lg px-3 py-1.5 border border-slate-700/60 text-xs space-x-2">
+        <i class="fa-regular fa-user text-indigo-400"></i>
+        <span id="authDisplayName" class="text-white font-medium">未登录</span>
+        <span id="authRoleBadge" class="px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">user</span>
+      </div>
+
+      <div id="adminUserSwitcher" class="hidden items-center bg-slate-800/80 rounded-lg px-3 py-1.5 border border-amber-500/30 text-xs space-x-2">
+        <i class="fa-solid fa-user-secret text-amber-400"></i>
+        <span class="text-slate-400">画像目标:</span>
+        <select id="adminTargetSelect" onchange="onAdminTargetChange()" class="bg-transparent text-white font-medium focus:outline-none max-w-[120px]"></select>
+      </div>
+
+      <div class="flex items-center bg-slate-800/80 rounded-lg px-3 py-1.5 border border-slate-700/60 text-xs space-x-2">
+        <i class="fa-solid fa-folder-tree text-cyan-400"></i>
+        <span class="text-slate-400">工作区:</span>
+        <input id="workspaceIdInput" type="text" value="default" class="bg-transparent text-white font-medium focus:outline-none w-24 border-b border-slate-600 focus:border-cyan-400 text-center transition" title="输入项目工作区ID" />
+      </div>
+
+      <button id="logoutBtn" onclick="handleLogout()" class="hidden px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-600/80 text-slate-300 hover:text-white text-xs border border-slate-700 transition">
+        <i class="fa-solid fa-right-from-bracket mr-1"></i>退出
+      </button>
+
+      <div id="healthBadge" class="flex items-center space-x-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span id="healthText">服务就绪</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主应用体：侧边标签页 + 主内容区 -->
+  <div class="flex-1 flex overflow-hidden">
+    <!-- 侧边导航栏 -->
+    <nav class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between p-4 select-none">
+      <div class="space-y-1.5">
+        <button onclick="switchTab('chat')" id="tabBtn-chat" class="tab-btn w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition duration-150 bg-indigo-600 text-white shadow-md shadow-indigo-600/20">
+          <i class="fa-solid fa-comments w-5 text-center"></i>
+          <span>智能交互工作台</span>
+        </button>
+
+        <button onclick="switchTab('kanban')" id="tabBtn-kanban" class="tab-btn w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition duration-150 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60">
+          <i class="fa-solid fa-table-columns w-5 text-center"></i>
+          <span>秘书看板与补丁</span>
+        </button>
+
+        <button onclick="switchTab('library')" id="tabBtn-library" class="tab-btn w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition duration-150 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60">
+          <i class="fa-solid fa-book-bookmark w-5 text-center"></i>
+          <span>文档知识库</span>
+        </button>
+
+        <button onclick="switchTab('memory')" id="tabBtn-memory" class="tab-btn w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition duration-150 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60">
+          <i class="fa-solid fa-brain w-5 text-center"></i>
+          <span>用户记忆与画像</span>
+        </button>
+      </div>
+
+      <!-- 底部系统与模型状态信息卡 -->
+      <div class="bg-slate-950/80 rounded-xl p-3.5 border border-slate-800/80 space-y-2 text-xs">
+        <div class="flex items-center justify-between text-slate-400">
+          <span class="flex items-center space-x-1.5">
+            <i class="fa-solid fa-microchip text-slate-500"></i>
+            <span>认知引擎:</span>
+          </span>
+          <span id="cogEngineName" class="text-slate-200 font-mono font-medium">PythonEngine</span>
+        </div>
+        <div class="flex items-center justify-between text-slate-400">
+          <span class="flex items-center space-x-1.5">
+            <i class="fa-solid fa-bolt text-amber-400"></i>
+            <span>接入模型:</span>
+          </span>
+          <span class="text-slate-200 font-mono truncate max-w-[110px]" title="deepseek-v4-flash @ poke2api">deepseek-v4-flash</span>
+        </div>
+        <div class="flex items-center justify-between text-slate-400 pt-1 border-t border-slate-800/60">
+          <span>流式 SSE:</span>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="streamToggle" class="sr-only peer" checked>
+            <div class="w-8 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3.5 after:transition-all peer-checked:bg-indigo-600"></div>
+          </label>
+        </div>
+      </div>
+    </nav>
+
+    <!-- 核心内容展示区 -->
+    <main class="flex-1 bg-slate-950 flex flex-col overflow-hidden relative">
+
+      <!-- ================= TAB 1: 智能交互工作台 (Chat) ================= -->
+      <section id="tab-chat" class="tab-pane flex-1 flex flex-col h-full overflow-hidden">
+        <!-- 对话流消息列表 -->
+        <div id="chatMessages" class="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+          <!-- 欢迎消息 -->
+          <div class="flex items-start space-x-3.5 max-w-3xl">
+            <div class="w-8 h-8 rounded-lg bg-indigo-600 flex-shrink-0 flex items-center justify-center text-white text-sm shadow-md">
+              <i class="fa-solid fa-robot"></i>
+            </div>
+            <div class="space-y-2">
+              <div class="bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-sm px-4 py-3 text-slate-200 text-sm shadow-sm prose leading-relaxed">
+                您好！我是 <strong>MyAgent Unified 现实补丁智能体</strong>。<br />
+                我具备以下核心能力：
+                <ul class="mt-2 space-y-1">
+                  <li><strong>用户个性化记忆</strong>：自动沉淀您的偏好、指令与身份，支持反馈与遗忘。</li>
+                  <li><strong>权威知识库检索</strong>：支持多格式文件上传与引用溯源。</li>
+                  <li><strong>现实补丁与项目秘书</strong>：智能解析任务与会议进展，支持「草稿 &rarr; 确认 &rarr; 回滚」安全状态机。</li>
+                  <li><strong>启发式 Tip 提示</strong>：主动捕捉潜在循环与决策风险。</li>
+                </ul>
+              </div>
+              <div class="text-[11px] text-slate-500 flex items-center space-x-2">
+                <span>System Agent</span>
+                <span>•</span>
+                <span>Ready</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 底部输入框 -->
+        <div class="p-4 bg-slate-900/90 border-t border-slate-800">
+          <div class="max-w-4xl mx-auto space-y-2">
+            <!-- 快捷指令建议 -->
+            <div class="flex items-center space-x-2 text-xs overflow-x-auto pb-1 text-slate-400 custom-scrollbar">
+              <span class="text-slate-500 flex-shrink-0"><i class="fa-regular fa-lightbulb"></i> 尝试输入:</span>
+              <button onclick="fillChatInput('我平时最喜欢喝拿铁咖啡，每天早上需要一杯')" class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 hover:text-white transition flex-shrink-0">☕ 记录习惯</button>
+              <button onclick="fillChatInput('创建一个任务：完成系统前后端联调测试')" class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 hover:text-white transition flex-shrink-0">📝 拟定任务补丁</button>
+              <button onclick="fillChatInput('请根据知识库资料介绍一下相关背景')" class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 hover:text-white transition flex-shrink-0">📚 知识库检索</button>
+              <button onclick="fillChatInput('同步任务：1. 修复文件上传400异常；2. 增加补丁实体状态机；3. 完善记忆检索过滤')" class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 hover:text-white transition flex-shrink-0">🔄 批量同步草稿</button>
+            </div>
+
+            <!-- 输入表单 -->
+            <form id="chatForm" onsubmit="handleChatSubmit(event)" class="relative flex items-center">
+              <input
+                id="chatInput"
+                type="text"
+                placeholder="与 Agent 对话、下发任务或询问知识库..."
+                class="w-full bg-slate-950 border border-slate-700 focus:border-indigo-500 rounded-xl pl-4 pr-28 py-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition shadow-inner"
+              />
+              <div class="absolute right-2 flex items-center space-x-1.5">
+                <button
+                  type="submit"
+                  id="sendBtn"
+                  class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-medium text-xs flex items-center space-x-1.5 transition shadow-md shadow-indigo-600/20"
+                >
+                  <span>发送</span>
+                  <i class="fa-solid fa-arrow-up text-xs"></i>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 2: 秘书看板与补丁 (Kanban) ================= -->
+      <section id="tab-kanban" class="tab-pane hidden flex-1 flex flex-col h-full p-6 overflow-y-auto custom-scrollbar space-y-6">
+        <!-- 看板头部概览 -->
+        <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+          <div>
+            <h2 class="text-xl font-bold text-white flex items-center space-x-2">
+              <i class="fa-solid fa-table-columns text-indigo-400"></i>
+              <span>项目任务看板 & 现实补丁管理</span>
+            </h2>
+            <p class="text-xs text-slate-400 mt-1">支持现实补丁（RealityPatch）原子确认与回滚，保障多渠道操作的一致性与可审计性。</p>
+          </div>
+          <button onclick="loadDashboard()" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center space-x-1.5 transition border border-slate-700">
+            <i class="fa-solid fa-rotate text-xs"></i>
+            <span>刷新看板</span>
+          </button>
+        </div>
+
+        <!-- 任务统计卡片 -->
+        <div class="grid grid-cols-4 gap-4">
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+            <div>
+              <p class="text-xs font-medium text-slate-400">待办任务 (Todo)</p>
+              <h3 id="countTodo" class="text-2xl font-bold text-slate-100 mt-1">0</h3>
+            </div>
+            <div class="w-10 h-10 rounded-lg bg-slate-800 text-slate-400 flex items-center justify-center text-lg"><i class="fa-regular fa-circle-dot"></i></div>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+            <div>
+              <p class="text-xs font-medium text-indigo-400">进行中 (In Progress)</p>
+              <h3 id="countInProgress" class="text-2xl font-bold text-indigo-300 mt-1">0</h3>
+            </div>
+            <div class="w-10 h-10 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center text-lg"><i class="fa-solid fa-spinner animate-spin"></i></div>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+            <div>
+              <p class="text-xs font-medium text-rose-400">受阻 (Blocked)</p>
+              <h3 id="countBlocked" class="text-2xl font-bold text-rose-300 mt-1">0</h3>
+            </div>
+            <div class="w-10 h-10 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center text-lg"><i class="fa-solid fa-circle-exclamation"></i></div>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+            <div>
+              <p class="text-xs font-medium text-emerald-400">已完成 (Done)</p>
+              <h3 id="countDone" class="text-2xl font-bold text-emerald-300 mt-1">0</h3>
+            </div>
+            <div class="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-lg"><i class="fa-solid fa-check-double"></i></div>
+          </div>
+        </div>
+
+        <!-- 任务四列泳道 -->
+        <div class="grid grid-cols-4 gap-4 flex-1">
+          <!-- 列1: Todo -->
+          <div class="bg-slate-900/60 rounded-xl p-3.5 border border-slate-800 flex flex-col space-y-3">
+            <div class="flex items-center justify-between text-xs font-semibold text-slate-300 pb-2 border-b border-slate-800">
+              <span class="flex items-center space-x-1.5"><span class="w-2 h-2 rounded-full bg-slate-400"></span><span>待办 (Todo)</span></span>
+              <span id="badgeTodo" class="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">0</span>
+            </div>
+            <div id="laneTodo" class="space-y-2.5 flex-1 min-h-[160px] custom-scrollbar overflow-y-auto"></div>
+          </div>
+
+          <!-- 列2: In Progress -->
+          <div class="bg-slate-900/60 rounded-xl p-3.5 border border-slate-800 flex flex-col space-y-3">
+            <div class="flex items-center justify-between text-xs font-semibold text-indigo-300 pb-2 border-b border-slate-800">
+              <span class="flex items-center space-x-1.5"><span class="w-2 h-2 rounded-full bg-indigo-400"></span><span>进行中 (In Progress)</span></span>
+              <span id="badgeInProgress" class="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400">0</span>
+            </div>
+            <div id="laneInProgress" class="space-y-2.5 flex-1 min-h-[160px] custom-scrollbar overflow-y-auto"></div>
+          </div>
+
+          <!-- 列3: Blocked -->
+          <div class="bg-slate-900/60 rounded-xl p-3.5 border border-slate-800 flex flex-col space-y-3">
+            <div class="flex items-center justify-between text-xs font-semibold text-rose-300 pb-2 border-b border-slate-800">
+              <span class="flex items-center space-x-1.5"><span class="w-2 h-2 rounded-full bg-rose-400"></span><span>受阻 (Blocked)</span></span>
+              <span id="badgeBlocked" class="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400">0</span>
+            </div>
+            <div id="laneBlocked" class="space-y-2.5 flex-1 min-h-[160px] custom-scrollbar overflow-y-auto"></div>
+          </div>
+
+          <!-- 列4: Done -->
+          <div class="bg-slate-900/60 rounded-xl p-3.5 border border-slate-800 flex flex-col space-y-3">
+            <div class="flex items-center justify-between text-xs font-semibold text-emerald-300 pb-2 border-b border-slate-800">
+              <span class="flex items-center space-x-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400"></span><span>已完成 (Done)</span></span>
+              <span id="badgeDone" class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">0</span>
+            </div>
+            <div id="laneDone" class="space-y-2.5 flex-1 min-h-[160px] custom-scrollbar overflow-y-auto"></div>
+          </div>
+        </div>
+
+        <!-- 现实补丁审计流与管理 -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+              <i class="fa-solid fa-file-shield text-cyan-400"></i>
+              <span>现实补丁审计流水 (Reality Patches)</span>
+            </h3>
+            <span class="text-xs text-slate-400">补丁确认将写入实体表，回滚将恢复原始状态</span>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs text-slate-300">
+              <thead class="bg-slate-950 text-slate-400 border-b border-slate-800 font-medium">
+                <tr>
+                  <th class="p-3">补丁 ID</th>
+                  <th class="p-3">目标类型</th>
+                  <th class="p-3">操作</th>
+                  <th class="p-3">变更提议</th>
+                  <th class="p-3">状态</th>
+                  <th class="p-3">创建者/时间</th>
+                  <th class="p-3 text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody id="patchTableBody" class="divide-y divide-slate-800/60">
+                <tr><td colspan="7" class="p-4 text-center text-slate-500">暂无补丁数据</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 3: 文档知识库 (Library) ================= -->
+      <section id="tab-library" class="tab-pane hidden flex-1 flex flex-col h-full p-6 overflow-y-auto custom-scrollbar space-y-6">
+        <!-- 头部 -->
+        <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+          <div>
+            <h2 class="text-xl font-bold text-white flex items-center space-x-2">
+              <i class="fa-solid fa-book-bookmark text-indigo-400"></i>
+              <span>权威文档知识库 (Local Library)</span>
+            </h2>
+            <p class="text-xs text-slate-400 mt-1">支持 PDF, DOCX, PPTX, XLSX, TXT, MD, CSV, JSON 格式文档的清洗、SHA-256 去重与全文检索。</p>
+          </div>
+          <button onclick="loadLibrary()" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center space-x-1.5 transition border border-slate-700">
+            <i class="fa-solid fa-rotate text-xs"></i>
+            <span>刷新库</span>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-3 gap-6">
+          <!-- 上传与录入面板 -->
+          <div class="space-y-4">
+            <!-- 文件拖拽上传 -->
+            <div
+              id="dropZone"
+              class="border-2 border-dashed border-slate-700 hover:border-indigo-500 bg-slate-900/60 rounded-xl p-6 text-center cursor-pointer transition flex flex-col items-center justify-center space-y-2"
+              onclick="document.getElementById('fileUploadInput').click()"
+            >
+              <input type="file" id="fileUploadInput" class="hidden" onchange="handleFileUpload(event)" />
+              <div class="w-12 h-12 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center text-xl">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+              </div>
+              <p class="text-sm font-medium text-slate-200">点击或拖拽文件上传</p>
+              <p class="text-xs text-slate-500">PDF, Word, PPT, Excel, Markdown, TXT 等</p>
+            </div>
+
+            <!-- 文本录入 -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+              <h4 class="text-xs font-bold text-slate-300 flex items-center space-x-1.5">
+                <i class="fa-solid fa-pen-nib text-cyan-400"></i>
+                <span>直接录入文本片段</span>
+              </h4>
+              <input id="docTitleInput" type="text" placeholder="文档标题 (如: 运维手册.md)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500" />
+              <textarea id="docContentInput" rows="4" placeholder="在此输入知识库文本内容..." class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 custom-scrollbar"></textarea>
+              <button onclick="handleTextDocumentIngest()" class="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition shadow-md shadow-indigo-600/20">
+                录入知识库
+              </button>
+            </div>
+          </div>
+
+          <!-- 文档索引列表与检索测试 -->
+          <div class="col-span-2 space-y-4">
+            <!-- 检索栏 -->
+            <div class="flex items-center space-x-2">
+              <div class="relative flex-1">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-500 text-xs"></i>
+                <input
+                  id="librarySearchInput"
+                  type="text"
+                  placeholder="输入关键字进行权威知识检索测试..."
+                  onkeyup="if(event.key==='Enter') searchLibrary()"
+                  class="w-full bg-slate-900 border border-slate-800 focus:border-indigo-500 rounded-xl pl-9 pr-4 py-2.5 text-xs text-slate-100 focus:outline-none"
+                />
+              </div>
+              <button onclick="searchLibrary()" class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-medium transition border border-slate-700">
+                检索
+              </button>
+            </div>
+
+            <!-- 文档列表 -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+              <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+                <span class="text-xs font-bold text-slate-300">已索引文档列表</span>
+                <span id="docCountBadge" class="text-xs text-slate-500">共 0 篇</span>
+              </div>
+              <div id="documentList" class="space-y-2 max-h-[380px] overflow-y-auto custom-scrollbar">
+                <p class="text-xs text-slate-500 text-center py-4">暂无文档记录</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 4: 用户记忆与画像 (Memory) ================= -->
+      <section id="tab-memory" class="tab-pane hidden flex-1 flex flex-col h-full p-6 overflow-y-auto custom-scrollbar space-y-6">
+        <!-- 头部 -->
+        <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+          <div>
+            <h2 class="text-xl font-bold text-white flex items-center space-x-2">
+              <i class="fa-solid fa-brain text-indigo-400"></i>
+              <span>用户隔离记忆 & 认知画像 (Memory Runtime)</span>
+            </h2>
+            <p class="text-xs text-slate-400 mt-1">基于 SQLite 物理隔离的用户长期记忆系统。普通用户仅可查看自身画像；管理员可穿透查看全部用户。</p>
+          </div>
+          <button onclick="loadUserMemories()" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center space-x-1.5 transition border border-slate-700">
+            <i class="fa-solid fa-rotate text-xs"></i>
+            <span>刷新记忆</span>
+          </button>
+        </div>
+
+        <!-- 管理员全用户画像控制台 -->
+        <div id="adminPortraitPanel" class="hidden bg-amber-950/20 border border-amber-500/30 rounded-xl p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-bold text-amber-200 flex items-center space-x-2">
+              <i class="fa-solid fa-user-shield"></i>
+              <span>全用户画像控制台（仅管理员）</span>
+            </h3>
+            <span id="adminUserCount" class="text-xs text-amber-400/80">0 名用户</span>
+          </div>
+          <div id="adminUserStatsGrid" class="grid grid-cols-3 gap-3"></div>
+        </div>
+
+        <!-- 搜索与当前用户概览 -->
+        <div class="flex items-center justify-between bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center text-lg font-bold">
+              <i class="fa-solid fa-user-tag"></i>
+            </div>
+            <div>
+              <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+                <span id="currentMemoryUser">alice</span>
+                <span class="text-[10px] px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300">隔离存储空间</span>
+              </h3>
+              <p class="text-xs text-slate-400">数据存储于 <code class="text-slate-300 font-mono">data/users/<span id="currentMemoryUserPath">alice</span>/memory.sqlite3</code></p>
+            </div>
+          </div>
+
+          <div class="flex items-center space-x-2">
+            <input
+              id="memoryQueryInput"
+              type="text"
+              placeholder="搜索当前用户记忆 (如: 咖啡)..."
+              onkeyup="if(event.key==='Enter') loadUserMemories()"
+              class="bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none w-56"
+            />
+            <button onclick="loadUserMemories()" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition">
+              搜索
+            </button>
+          </div>
+        </div>
+
+        <!-- 记忆列表卡片展示 -->
+        <div id="memoryCardGrid" class="grid grid-cols-2 gap-4">
+          <!-- 动态渲染卡片 -->
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- 登录 / 注册浮层 -->
+  <div id="authOverlay" class="fixed inset-0 z-[80] bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-6">
+    <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 space-y-5">
+      <div class="text-center space-y-1">
+        <div class="w-12 h-12 mx-auto rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+          <i class="fa-solid fa-atom text-white text-xl"></i>
+        </div>
+        <h2 class="text-lg font-bold text-white">登录 MyAgent Unified</h2>
+        <p class="text-xs text-slate-400">记忆按用户物理隔离；仅管理员可查看全部画像</p>
+      </div>
+
+      <div class="flex bg-slate-950 rounded-lg p-1 border border-slate-800 text-xs">
+        <button id="authTabLogin" onclick="setAuthMode('login')" class="flex-1 py-1.5 rounded-md bg-indigo-600 text-white font-medium">登录</button>
+        <button id="authTabRegister" onclick="setAuthMode('register')" class="flex-1 py-1.5 rounded-md text-slate-400 font-medium">注册</button>
+      </div>
+
+      <form id="authForm" onsubmit="handleAuthSubmit(event)" class="space-y-3">
+        <input id="authUsername" type="text" placeholder="用户名（至少 3 位）" autocomplete="username" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500" />
+        <input id="authPassword" type="password" placeholder="密码（至少 6 位）" autocomplete="current-password" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500" />
+        <input id="authNickname" type="text" placeholder="昵称（可选）" class="hidden w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500" />
+        <p id="authError" class="hidden text-xs text-rose-400"></p>
+        <button type="submit" id="authSubmitBtn" class="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium">登录</button>
+      </form>
+
+      <div class="space-y-2">
+        <p class="text-[11px] text-slate-500 text-center">测试账号一键填充</p>
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="fillDemoAccount('admin','admin123')" class="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs hover:bg-amber-500/20">管理员 admin / admin123</button>
+          <button onclick="fillDemoAccount('alice','123456')" class="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-xs hover:bg-slate-700">普通用户 alice / 123456</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript 交互驱动代码 -->
+  <script>
+    // 全局状态管理
+    const state = {
+      activeTab: 'chat',
+      userId: 'alice',
+      workspaceId: 'default',
+      isStreaming: true,
+      token: localStorage.getItem('myagent_token') || '',
+      currentUser: null,
+      authMode: 'login',
+    };
+
+    function authHeaders(extra) {
+      const headers = Object.assign({}, extra || {});
+      if (state.token) headers['Authorization'] = 'Bearer ' + state.token;
+      return headers;
+    }
+
+    function setAuthMode(mode) {
+      state.authMode = mode;
+      const loginBtn = document.getElementById('authTabLogin');
+      const registerBtn = document.getElementById('authTabRegister');
+      const nick = document.getElementById('authNickname');
+      const submit = document.getElementById('authSubmitBtn');
+      if (mode === 'register') {
+        loginBtn.className = 'flex-1 py-1.5 rounded-md text-slate-400 font-medium';
+        registerBtn.className = 'flex-1 py-1.5 rounded-md bg-indigo-600 text-white font-medium';
+        nick.classList.remove('hidden');
+        submit.innerText = '注册并登录';
+      } else {
+        loginBtn.className = 'flex-1 py-1.5 rounded-md bg-indigo-600 text-white font-medium';
+        registerBtn.className = 'flex-1 py-1.5 rounded-md text-slate-400 font-medium';
+        nick.classList.add('hidden');
+        submit.innerText = '登录';
+      }
+      document.getElementById('authError').classList.add('hidden');
+    }
+
+    function fillDemoAccount(username, password) {
+      setAuthMode('login');
+      document.getElementById('authUsername').value = username;
+      document.getElementById('authPassword').value = password;
+    }
+
+    function showAuthError(msg) {
+      const el = document.getElementById('authError');
+      el.innerText = msg;
+      el.classList.remove('hidden');
+    }
+
+    async function readJson(resp) {
+      const text = await resp.text();
+      if (!text) return {};
+      try {
+        return JSON.parse(text);
+      } catch (err) {
+        if (resp.status === 404) {
+          throw new Error('认证接口不存在，请重启后端服务后再试');
+        }
+        throw new Error(text.slice(0, 120) || '服务器返回了非 JSON 响应');
+      }
+    }
+
+    async function handleAuthSubmit(e) {
+      e.preventDefault();
+      const username = document.getElementById('authUsername').value.trim();
+      const password = document.getElementById('authPassword').value;
+      const nickname = document.getElementById('authNickname').value.trim();
+      if (!username || username.length < 3) {
+        showAuthError('用户名至少需要 3 个字符');
+        return;
+      }
+      if (!password || password.length < 6) {
+        showAuthError('密码至少需要 6 位');
+        return;
+      }
+      try {
+        if (state.authMode === 'register') {
+          const reg = await fetch('/v1/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, nickname })
+          });
+          const regData = await readJson(reg);
+          if (!reg.ok) {
+            showAuthError(regData.error || '注册失败');
+            return;
+          }
+        }
+        const resp = await fetch('/v1/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await readJson(resp);
+        if (!resp.ok) {
+          showAuthError(data.error || '登录失败');
+          return;
+        }
+        applySession(data.token, data.user);
+      } catch (err) {
+        showAuthError(err.message);
+      }
+    }
+
+    function applySession(token, user) {
+      state.token = token;
+      state.currentUser = user;
+      state.userId = user.username;
+      localStorage.setItem('myagent_token', token);
+      document.getElementById('authOverlay').classList.add('hidden');
+      document.getElementById('authUserBar').classList.remove('hidden');
+      document.getElementById('authUserBar').classList.add('flex');
+      document.getElementById('logoutBtn').classList.remove('hidden');
+      document.getElementById('authDisplayName').innerText = user.nickname || user.username;
+      const badge = document.getElementById('authRoleBadge');
+      if (user.role === 'admin') {
+        badge.innerText = '管理员';
+        badge.className = 'px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30';
+        document.getElementById('adminUserSwitcher').classList.remove('hidden');
+        document.getElementById('adminUserSwitcher').classList.add('flex');
+        document.getElementById('adminPortraitPanel').classList.remove('hidden');
+        loadAdminUsers();
+      } else {
+        badge.innerText = '普通用户';
+        badge.className = 'px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/20';
+        document.getElementById('adminUserSwitcher').classList.add('hidden');
+        document.getElementById('adminUserSwitcher').classList.remove('flex');
+        document.getElementById('adminPortraitPanel').classList.add('hidden');
+      }
+      document.getElementById('currentMemoryUser').innerText = state.userId;
+      document.getElementById('currentMemoryUserPath').innerText = state.userId;
+    }
+
+    function clearSession() {
+      state.token = '';
+      state.currentUser = null;
+      localStorage.removeItem('myagent_token');
+      document.getElementById('authOverlay').classList.remove('hidden');
+      document.getElementById('authUserBar').classList.add('hidden');
+      document.getElementById('logoutBtn').classList.add('hidden');
+      document.getElementById('adminUserSwitcher').classList.add('hidden');
+      document.getElementById('adminPortraitPanel').classList.add('hidden');
+    }
+
+    async function restoreSession() {
+      if (!state.token) {
+        clearSession();
+        return;
+      }
+      try {
+        const resp = await fetch('/v1/auth/me', { headers: authHeaders() });
+        if (!resp.ok) {
+          clearSession();
+          return;
+        }
+        const data = await resp.json();
+        applySession(state.token, data.user);
+      } catch (err) {
+        clearSession();
+      }
+    }
+
+    async function handleLogout() {
+      try {
+        await fetch('/v1/auth/logout', { method: 'POST', headers: authHeaders() });
+      } catch (err) {}
+      clearSession();
+    }
+
+    async function loadAdminUsers() {
+      if (!state.currentUser || state.currentUser.role !== 'admin') return;
+      try {
+        const resp = await fetch('/v1/admin/users', { headers: authHeaders() });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const users = data.users || [];
+        document.getElementById('adminUserCount').innerText = users.length + ' 名用户';
+        const select = document.getElementById('adminTargetSelect');
+        select.innerHTML = users.map(u => `<option value="${escapeHtml(u.username)}" ${u.username === state.userId ? 'selected' : ''}>${escapeHtml(u.nickname || u.username)} (${u.role})</option>`).join('');
+        document.getElementById('adminUserStatsGrid').innerHTML = users.map(u => `
+          <button onclick="inspectUser('${escapeHtml(u.username)}')" class="text-left bg-slate-950/70 border border-slate-800 hover:border-amber-500/40 rounded-lg p-3 space-y-1">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-white font-medium">${escapeHtml(u.nickname || u.username)}</span>
+              <span class="text-[10px] text-slate-400">${u.role}</span>
+            </div>
+            <p class="text-[11px] text-slate-400">记忆 ${u.stats?.total_memories || 0} · 交互 ${u.stats?.total_interactions || 0}</p>
+          </button>
+        `).join('');
+      } catch (err) {
+        console.error('Load admin users failed:', err);
+      }
+    }
+
+    function onAdminTargetChange() {
+      const value = document.getElementById('adminTargetSelect').value;
+      inspectUser(value);
+    }
+
+    function inspectUser(username) {
+      state.userId = username;
+      document.getElementById('currentMemoryUser').innerText = username;
+      document.getElementById('currentMemoryUserPath').innerText = username;
+      const select = document.getElementById('adminTargetSelect');
+      if (select) select.value = username;
+      loadUserMemories();
+    }
+
+    // 初始化运行
+    document.addEventListener('DOMContentLoaded', () => {
+      const wsEl = document.getElementById('workspaceIdInput');
+      const streamEl = document.getElementById('streamToggle');
+
+      wsEl.addEventListener('change', () => {
+        state.workspaceId = wsEl.value.trim() || 'default';
+        if (state.activeTab === 'kanban') loadDashboard();
+      });
+
+      streamEl.addEventListener('change', () => {
+        state.isStreaming = streamEl.checked;
+      });
+
+      checkHealth();
+      restoreSession();
+    });
+
+    // 选项卡切换
+    function switchTab(tabId) {
+      state.activeTab = tabId;
+      document.querySelectorAll('.tab-pane').forEach(el => el.classList.add('hidden'));
+      document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+
+      // 更新按钮高亮
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('bg-indigo-600', 'text-white', 'shadow-md', 'shadow-indigo-600/20');
+        btn.classList.add('text-slate-400', 'hover:text-slate-200', 'hover:bg-slate-800/60');
+      });
+      const activeBtn = document.getElementById(`tabBtn-${tabId}`);
+      activeBtn.classList.add('bg-indigo-600', 'text-white', 'shadow-md', 'shadow-indigo-600/20');
+      activeBtn.classList.remove('text-slate-400', 'hover:text-slate-200', 'hover:bg-slate-800/60');
+
+      if (tabId === 'kanban') loadDashboard();
+      if (tabId === 'library') loadLibrary();
+      if (tabId === 'memory') {
+        if (state.currentUser && state.currentUser.role === 'admin') loadAdminUsers();
+        loadUserMemories();
+      }
+    }
+
+    // 检查后端状态
+    async function checkHealth() {
+      try {
+        const res = await fetch('/health');
+        const data = await res.json();
+        if (data.status === 'ok') {
+          document.getElementById('healthBadge').className = 'flex items-center space-x-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium';
+          document.getElementById('healthText').innerText = '系统正常';
+          document.getElementById('cogEngineName').innerText = data.cognitive_engine || 'PythonEngine';
+        }
+      } catch (err) {
+        document.getElementById('healthBadge').className = 'flex items-center space-x-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20 font-medium';
+        document.getElementById('healthText').innerText = '服务离线';
+      }
+    }
+
+    // 快捷填充输入框
+    function fillChatInput(text) {
+      const input = document.getElementById('chatInput');
+      input.value = text;
+      input.focus();
+    }
+
+    // ================= 对话模块 (Chat) =================
+    async function handleChatSubmit(e) {
+      e.preventDefault();
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+
+      // 渲染用户消息
+      appendUserMessage(text);
+
+      // 准备 Agent 气泡容器
+      const msgId = 'msg-' + Date.now();
+      appendAgentPlaceholder(msgId);
+
+      const payload = {
+        user_id: state.userId,
+        workspace_id: state.workspaceId,
+        message: text,
+        channel: 'web'
+      };
+
+      if (state.isStreaming) {
+        // SSE 流式接收
+        try {
+          const resp = await fetch('/v1/interactions/stream', {
+            method: 'POST',
+            headers: authHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify(payload)
+          });
+          const reader = resp.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n\n');
+            buffer = lines.pop(); // 保留未完整的片段
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const jsonStr = line.replace('data: ', '').trim();
+                try {
+                  const eventData = JSON.parse(jsonStr);
+                  if (eventData.type === 'response') {
+                    renderAgentResponse(msgId, eventData.data);
+                  }
+                } catch (pe) {
+                  console.error('Parse SSE json failed:', pe);
+                }
+              }
+            }
+          }
+        } catch (err) {
+          renderAgentError(msgId, err.message);
+        }
+      } else {
+        // 普通 HTTP POST 交互
+        try {
+          const resp = await fetch('/v1/interactions', {
+            method: 'POST',
+            headers: authHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify(payload)
+          });
+          const data = await resp.json();
+          if (resp.ok) {
+            renderAgentResponse(msgId, data);
+          } else {
+            renderAgentError(msgId, data.error || '请求失败');
+          }
+        } catch (err) {
+          renderAgentError(msgId, err.message);
+        }
+      }
+    }
+
+    function appendUserMessage(text) {
+      const container = document.getElementById('chatMessages');
+      const div = document.createElement('div');
+      div.className = 'flex items-start justify-end space-x-3.5 max-w-3xl ml-auto';
+      div.innerHTML = `
+        <div class="space-y-1 text-right">
+          <div class="bg-indigo-600 text-white rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm shadow-md leading-relaxed">
+            ${escapeHtml(text)}
+          </div>
+          <div class="text-[11px] text-slate-500">
+            <span>${state.userId}</span> • <span>刚刚</span>
+          </div>
+        </div>
+        <div class="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex-shrink-0 flex items-center justify-center text-slate-300 text-sm">
+          <i class="fa-solid fa-user"></i>
+        </div>
+      `;
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function appendAgentPlaceholder(msgId) {
+      const container = document.getElementById('chatMessages');
+      const div = document.createElement('div');
+      div.id = msgId;
+      div.className = 'flex items-start space-x-3.5 max-w-3xl';
+      div.innerHTML = `
+        <div class="w-8 h-8 rounded-lg bg-indigo-600 flex-shrink-0 flex items-center justify-center text-white text-sm shadow-md">
+          <i class="fa-solid fa-robot"></i>
+        </div>
+        <div class="space-y-3 flex-1">
+          <div class="agent-content bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-sm px-4 py-3 text-slate-200 text-sm shadow-sm prose leading-relaxed">
+            <div class="flex items-center space-x-2 text-slate-400">
+              <i class="fa-solid fa-circle-notch animate-spin text-xs"></i>
+              <span>正在思考与处理...</span>
+            </div>
+          </div>
+          <div class="agent-extras space-y-2"></div>
+        </div>
+      `;
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function renderAgentResponse(msgId, data) {
+      const el = document.getElementById(msgId);
+      if (!el) return;
+
+      const contentBox = el.querySelector('.agent-content');
+      const extrasBox = el.querySelector('.agent-extras');
+
+      // Markdown 解析渲染
+      contentBox.innerHTML = marked.parse(data.content || '（无响应内容）');
+
+      extrasBox.innerHTML = '';
+
+      // 1. 渲染待确认现实补丁 / 秘书事件卡片
+      if (data.secretary_events && data.secretary_events.length > 0) {
+        data.secretary_events.forEach(secEvent => {
+          if (secEvent.type === 'reality_patch') {
+            const patch = secEvent.data;
+            const card = document.createElement('div');
+            card.className = 'bg-cyan-950/40 border border-cyan-500/30 rounded-xl p-3.5 text-xs space-y-2 text-cyan-200';
+            card.innerHTML = `
+              <div class="flex items-center justify-between font-semibold">
+                <span class="flex items-center space-x-1.5">
+                  <i class="fa-solid fa-shield-halved text-cyan-400"></i>
+                  <span>待确认现实补丁: ${patch.id}</span>
+                </span>
+                <span class="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono">${patch.operation} ${patch.target_type}</span>
+              </div>
+              <p class="text-slate-300">提议变更: <strong>${escapeHtml(patch.proposed_change)}</strong></p>
+              <div class="flex items-center justify-end space-x-2 pt-1">
+                <button onclick="confirmPatch('${patch.id}')" class="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-medium transition shadow">
+                  <i class="fa-solid fa-check mr-1"></i> 确认并应用补丁
+                </button>
+              </div>
+            `;
+            extrasBox.appendChild(card);
+          } else if (secEvent.type === 'sync_draft') {
+            const draft = secEvent.data;
+            const card = document.createElement('div');
+            card.className = 'bg-slate-900 border border-slate-800 rounded-xl p-3.5 text-xs space-y-2 text-slate-300';
+            card.innerHTML = `
+              <div class="flex items-center justify-between font-semibold text-white">
+                <span><i class="fa-solid fa-list-check text-indigo-400 mr-1.5"></i> 同步草稿已生成 (${draft.session_id})</span>
+                <button onclick="confirmSync('${draft.session_id}')" class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white transition">一键确认同步</button>
+              </div>
+              <p class="text-slate-400">${draft.draft.tasks.length} 项任务提议待确认</p>
+            `;
+            extrasBox.appendChild(card);
+          }
+        });
+      }
+
+      // 2. 渲染权威引用 (Citations)
+      if (data.citations && data.citations.length > 0) {
+        const citeBox = document.createElement('div');
+        citeBox.className = 'bg-slate-900/90 border border-slate-800 rounded-xl p-3 text-xs space-y-1.5';
+        citeBox.innerHTML = `
+          <div class="font-semibold text-slate-400 flex items-center space-x-1.5">
+            <i class="fa-solid fa-bookmark text-indigo-400"></i>
+            <span>参考知识库来源 (${data.citations.length})</span>
+          </div>
+        `;
+        data.citations.forEach(c => {
+          citeBox.innerHTML += `
+            <div class="pl-3 border-l-2 border-indigo-500/50 py-0.5">
+              <span class="text-indigo-300 font-medium">[${escapeHtml(c.title)}]</span>
+              <span class="text-slate-400 text-[11px] ml-1">(${escapeHtml(c.source)})</span>
+              <p class="text-slate-400 text-[11px] mt-0.5 line-clamp-2">${escapeHtml(c.snippet)}</p>
+            </div>
+          `;
+        });
+        extrasBox.appendChild(citeBox);
+      }
+
+      // 3. 渲染启发式 Tip
+      if (data.tips && data.tips.length > 0) {
+        data.tips.forEach(tip => {
+          const tipCard = document.createElement('div');
+          tipCard.className = 'bg-amber-950/30 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-200 flex items-start space-x-2.5';
+          tipCard.innerHTML = `
+            <i class="fa-regular fa-lightbulb text-amber-400 text-sm mt-0.5"></i>
+            <div class="space-y-0.5 flex-1">
+              <div class="font-bold text-amber-300">${escapeHtml(tip.title)}</div>
+              <p class="text-slate-300">${escapeHtml(tip.message)}</p>
+              ${tip.alternative_angle ? `<p class="text-amber-400/80 italic text-[11px]">建议角度: ${escapeHtml(tip.alternative_angle)}</p>` : ''}
+            </div>
+          `;
+          extrasBox.appendChild(tipCard);
+        });
+      }
+
+      // 4. 渲染记忆萃取事件
+      if (data.memory_events && data.memory_events.length > 0) {
+        const memEventDiv = document.createElement('div');
+        memEventDiv.className = 'text-[11px] text-slate-500 flex items-center space-x-2';
+        memEventDiv.innerHTML = `
+          <i class="fa-solid fa-sparkles text-indigo-400"></i>
+          <span>萃取长期记忆: ${data.memory_events.map(m => `[${m.category}] ${escapeHtml(m.content)}`).join(', ')}</span>
+        `;
+        extrasBox.appendChild(memEventDiv);
+      }
+
+      const chatContainer = document.getElementById('chatMessages');
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function renderAgentError(msgId, errMsg) {
+      const el = document.getElementById(msgId);
+      if (!el) return;
+      const contentBox = el.querySelector('.agent-content');
+      contentBox.innerHTML = `<span class="text-rose-400"><i class="fa-solid fa-triangle-exclamation mr-1.5"></i> 处理失败: ${escapeHtml(errMsg)}</span>`;
+    }
+
+    // ================= 看板与补丁模块 (Kanban & Patches) =================
+    async function loadDashboard() {
+      try {
+        const resp = await fetch(`/v1/workspaces/${encodeURIComponent(state.workspaceId)}/dashboard`, { headers: authHeaders() });
+        const data = await resp.json();
+
+        // 统计数字更新
+        const counts = data.counts || { todo: 0, in_progress: 0, blocked: 0, done: 0 };
+        document.getElementById('countTodo').innerText = counts.todo || 0;
+        document.getElementById('countInProgress').innerText = counts.in_progress || 0;
+        document.getElementById('countBlocked').innerText = counts.blocked || 0;
+        document.getElementById('countDone').innerText = counts.done || 0;
+
+        document.getElementById('badgeTodo').innerText = counts.todo || 0;
+        document.getElementById('badgeInProgress').innerText = counts.in_progress || 0;
+        document.getElementById('badgeBlocked').innerText = counts.blocked || 0;
+        document.getElementById('badgeDone').innerText = counts.done || 0;
+
+        // 渲染泳道任务卡片
+        const lanes = {
+          todo: document.getElementById('laneTodo'),
+          in_progress: document.getElementById('laneInProgress'),
+          blocked: document.getElementById('laneBlocked'),
+          done: document.getElementById('laneDone'),
+        };
+        Object.values(lanes).forEach(lane => lane.innerHTML = '');
+
+        const tasks = data.tasks || [];
+        if (tasks.length === 0) {
+          Object.values(lanes).forEach(lane => {
+            lane.innerHTML = '<p class="text-xs text-slate-600 text-center py-6">无任务</p>';
+          });
+        } else {
+          tasks.forEach(task => {
+            const lane = lanes[task.status] || lanes.todo;
+            const card = document.createElement('div');
+            card.className = 'bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-2 text-xs shadow-sm hover:border-slate-700 transition';
+            card.innerHTML = `
+              <div class="flex items-center justify-between text-slate-400 text-[11px]">
+                <span class="font-mono">${task.id}</span>
+                <span>${task.owner || '未指派'}</span>
+              </div>
+              <p class="text-slate-200 font-medium">${escapeHtml(task.title)}</p>
+              <div class="text-[10px] text-slate-500 pt-1 border-t border-slate-800/60 flex items-center justify-between">
+                <span>更新: ${task.updated_at ? task.updated_at.substring(5, 16) : ''}</span>
+              </div>
+            `;
+            lane.appendChild(card);
+          });
+        }
+
+        // 渲染现实补丁表格
+        const patchTable = document.getElementById('patchTableBody');
+        const patches = data.patches || [];
+        if (patches.length === 0) {
+          patchTable.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-slate-500">暂无补丁数据</td></tr>';
+        } else {
+          patchTable.innerHTML = patches.map(p => {
+            let statusBadge = `<span class="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">Draft (草稿)</span>`;
+            if (p.status === 'applied') {
+              statusBadge = `<span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Applied (已应用)</span>`;
+            } else if (p.status === 'rolled_back') {
+              statusBadge = `<span class="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">Rolled Back (已回滚)</span>`;
+            }
+
+            let actionBtn = '';
+            if (p.status === 'draft') {
+              actionBtn = `<button onclick="confirmPatch('${p.id}')" class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium">确认应用</button>`;
+            } else if (p.status === 'applied') {
+              actionBtn = `<button onclick="rollbackPatch('${p.id}')" class="px-2.5 py-1 rounded bg-rose-600/80 hover:bg-rose-600 text-white font-medium">回滚补丁</button>`;
+            } else {
+              actionBtn = `<span class="text-slate-600">已归档</span>`;
+            }
+
+            return `
+              <tr class="hover:bg-slate-900/40 transition">
+                <td class="p-3 font-mono font-medium text-slate-200">${p.id}</td>
+                <td class="p-3">${p.target_type}</td>
+                <td class="p-3 font-semibold text-cyan-400">${p.operation}</td>
+                <td class="p-3 text-slate-200 max-w-xs truncate" title="${escapeHtml(p.proposed_change)}">${escapeHtml(p.proposed_change)}</td>
+                <td class="p-3">${statusBadge}</td>
+                <td class="p-3 text-slate-400">${p.created_by}<br /><span class="text-[10px] text-slate-500">${p.created_at ? p.created_at.substring(5, 16) : ''}</span></td>
+                <td class="p-3 text-right">${actionBtn}</td>
+              </tr>
+            `;
+          }).join('');
+        }
+      } catch (err) {
+        console.error('Load dashboard failed:', err);
+      }
+    }
+
+    async function confirmPatch(patchId) {
+      try {
+        const resp = await fetch(`/v1/patches/${encodeURIComponent(patchId)}/confirm`, {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ actor: state.userId })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+          alert(`补丁 ${patchId} 已成功应用并生效！`);
+          loadDashboard();
+        } else {
+          alert(`确认失败: ${data.error}`);
+        }
+      } catch (err) {
+        alert(`网络异常: ${err.message}`);
+      }
+    }
+
+    async function rollbackPatch(patchId) {
+      if (!confirm(`确定要回滚补丁 ${patchId} 并恢复原状吗？`)) return;
+      try {
+        const resp = await fetch(`/v1/patches/${encodeURIComponent(patchId)}/rollback`, {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ actor: state.userId })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+          alert(`补丁 ${patchId} 已成功回滚！`);
+          loadDashboard();
+        } else {
+          alert(`回滚失败: ${data.error}`);
+        }
+      } catch (err) {
+        alert(`网络异常: ${err.message}`);
+      }
+    }
+
+    async function confirmSync(sessionId) {
+      try {
+        const resp = await fetch(`/v1/sync/${encodeURIComponent(sessionId)}/confirm`, {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ actor: state.userId })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+          alert(`同步会话 ${sessionId} 已确认，新增 ${data.tasks.length} 项任务！`);
+          loadDashboard();
+        } else {
+          alert(`确认失败: ${data.error}`);
+        }
+      } catch (err) {
+        alert(`网络异常: ${err.message}`);
+      }
+    }
+
+    // ================= 知识库模块 (Library) =================
+    async function loadLibrary() {
+      try {
+        const resp = await fetch('/v1/library/documents', { headers: authHeaders() });
+        const data = await resp.json();
+        const docs = data.documents || [];
+        document.getElementById('docCountBadge').innerText = `共 ${docs.length} 篇`;
+
+        const listEl = document.getElementById('documentList');
+        if (docs.length === 0) {
+          listEl.innerHTML = '<p class="text-xs text-slate-500 text-center py-4">暂无文档记录</p>';
+          return;
+        }
+
+        listEl.innerHTML = docs.map(doc => `
+          <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-1 text-xs hover:border-slate-700 transition">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-slate-200 flex items-center space-x-1.5">
+                <i class="fa-regular fa-file-lines text-indigo-400"></i>
+                <span>${escapeHtml(doc.title)}</span>
+              </span>
+              <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px]">${doc.source || 'upload'}</span>
+            </div>
+            <p class="text-slate-400 text-[11px] line-clamp-2">${escapeHtml(doc.content || '')}</p>
+            <div class="flex items-center justify-between text-[10px] text-slate-500 pt-1 font-mono">
+              <span>SHA256: ${doc.content_hash ? doc.content_hash.substring(0, 16) + '...' : ''}</span>
+              <span>字数: ${doc.char_count || 0}</span>
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        console.error('Load library failed:', err);
+      }
+    }
+
+    async function handleFileUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('source', 'upload');
+
+      try {
+        const resp = await fetch('/v1/library/documents', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: formData
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+          alert(`文件「${file.name}」录入成功！状态: ${data.status}`);
+          loadLibrary();
+        } else {
+          alert(`上传失败: ${data.error || '未知错误'}`);
+        }
+      } catch (err) {
+        alert(`上传网络异常: ${err.message}`);
+      }
+      e.target.value = '';
+    }
+
+    async function handleTextDocumentIngest() {
+      const title = document.getElementById('docTitleInput').value.trim() || 'note.txt';
+      const content = document.getElementById('docContentInput').value.trim();
+      if (!content) {
+        alert('请输入文档内容');
+        return;
+      }
+
+      try {
+        const resp = await fetch('/v1/library/documents', {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ filename: title, content, source: 'manual' })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+          alert(`文档「${title}」已录入知识库！状态: ${data.status}`);
+          document.getElementById('docTitleInput').value = '';
+          document.getElementById('docContentInput').value = '';
+          loadLibrary();
+        } else {
+          alert(`录入失败: ${data.error}`);
+        }
+      } catch (err) {
+        alert(`网络异常: ${err.message}`);
+      }
+    }
+
+    async function searchLibrary() {
+      const query = document.getElementById('librarySearchInput').value.trim();
+      try {
+        const resp = await fetch(`/v1/library/search?q=${encodeURIComponent(query)}&limit=10`, { headers: authHeaders() });
+        const data = await resp.json();
+        const results = data.results || [];
+
+        const listEl = document.getElementById('documentList');
+        if (results.length === 0) {
+          listEl.innerHTML = `<p class="text-xs text-amber-400/80 text-center py-4">未找到匹配「${escapeHtml(query)}」的知识库片段</p>`;
+          return;
+        }
+
+        listEl.innerHTML = `
+          <div class="text-xs text-indigo-400 font-semibold mb-2">命中检索结果 (${results.length} 条):</div>
+          ${results.map(r => `
+            <div class="bg-slate-950 border border-indigo-500/30 rounded-xl p-3 space-y-1 text-xs">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-indigo-300">[${escapeHtml(r.title)}]</span>
+                <span class="text-[10px] text-slate-500">匹配得分: ${r.score || 0}</span>
+              </div>
+              <p class="text-slate-300 text-[11px]">${escapeHtml(r.snippet)}</p>
+            </div>
+          `).join('')}
+        `;
+      } catch (err) {
+        console.error('Search library failed:', err);
+      }
+    }
+
+    // ================= 记忆与认知画像模块 (Memory) =================
+    async function loadUserMemories() {
+      const q = document.getElementById('memoryQueryInput').value.trim();
+      try {
+        const resp = await fetch(`/v1/users/${encodeURIComponent(state.userId)}/memory?q=${encodeURIComponent(q)}&limit=50`, { headers: authHeaders() });
+        const data = await resp.json();
+        if (resp.status === 401) {
+          clearSession();
+          return;
+        }
+        if (resp.status === 403) {
+          document.getElementById('memoryCardGrid').innerHTML = `<div class="col-span-2 text-center py-12 text-rose-400 text-xs">${escapeHtml(data.error || '无权查看其他用户的记忆画像')}</div>`;
+          return;
+        }
+        const memories = data.memories || [];
+
+        const grid = document.getElementById('memoryCardGrid');
+        if (memories.length === 0) {
+          grid.innerHTML = `<div class="col-span-2 text-center py-12 text-slate-500 text-xs">当前用户暂无${q ? '匹配' : ''}画像记忆</div>`;
+          return;
+        }
+
+        grid.innerHTML = memories.map(mem => `
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3 shadow-sm hover:border-slate-700 transition">
+            <div class="flex items-center justify-between">
+              <span class="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                ${mem.category}
+              </span>
+              <div class="flex items-center space-x-1 text-xs text-amber-400">
+                <i class="fa-solid fa-star text-[10px]"></i>
+                <span class="font-mono font-bold">${(mem.confidence * 100).toFixed(0)}%</span>
+              </div>
+            </div>
+            <div>
+              <p class="text-sm font-semibold text-slate-100">${escapeHtml(mem.content)}</p>
+              <p class="text-xs text-slate-400 mt-1 italic">证据: "${escapeHtml(mem.evidence || '')}"</p>
+            </div>
+            <div class="flex items-center justify-between pt-2 border-t border-slate-800 text-xs">
+              <span class="text-slate-500 text-[10px]">出现次数: ${mem.occurrence_count} 次</span>
+              <div class="flex items-center space-x-1.5">
+                <button onclick="applyFeedback('${mem.id}', 'confirm')" title="确认增强置信度" class="px-2 py-1 rounded bg-slate-800 hover:bg-emerald-600/80 hover:text-white text-slate-300 transition">
+                  <i class="fa-solid fa-thumbs-up"></i>
+                </button>
+                <button onclick="applyFeedback('${mem.id}', 'reject')" title="拒绝标记为无效" class="px-2 py-1 rounded bg-slate-800 hover:bg-rose-600/80 hover:text-white text-slate-300 transition">
+                  <i class="fa-solid fa-thumbs-down"></i>
+                </button>
+                <button onclick="forgetMemory('${mem.id}')" title="彻底遗忘并抹除证据链" class="px-2 py-1 rounded bg-slate-800 hover:bg-red-700 hover:text-white text-slate-300 transition">
+                  <i class="fa-solid fa-trash-can"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        console.error('Load memories failed:', err);
+      }
+    }
+
+    async function applyFeedback(memoryId, feedbackType) {
+      try {
+        const resp = await fetch('/v1/feedback', {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            user_id: state.userId,
+            memory_id: memoryId,
+            feedback_type: feedbackType
+          })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+          loadUserMemories();
+        } else {
+          alert(`反馈提交失败: ${data.error}`);
+        }
+      } catch (err) {
+        alert(`网络异常: ${err.message}`);
+      }
+    }
+
+    async function forgetMemory(memoryId) {
+      if (!confirm('确定彻底抹除此条记忆及相关证据链吗？')) return;
+      try {
+        const resp = await fetch(`/v1/users/${encodeURIComponent(state.userId)}/memory/${encodeURIComponent(memoryId)}/forget`, {
+          method: 'POST',
+          headers: authHeaders()
+        });
+        const data = await resp.json();
+        if (resp.ok && data.success) {
+          loadUserMemories();
+        } else {
+          alert('遗忘操作未成功');
+        }
+      } catch (err) {
+        alert(`网络异常: ${err.message}`);
+      }
+    }
+
+    // 辅助防 XSS 函数
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+  </script>
+</body>
+</html>
