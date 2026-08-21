@@ -78,6 +78,12 @@
     .rp-card { background: var(--paper); border: 1px solid var(--hairline); }
     .rp-panel { background: var(--cream-deep); border: 1px solid var(--hairline); }
     .rp-eyebrow { font-family: "JetBrains Mono", Consolas, monospace; text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; color: var(--muted); }
+    .rp-chip {
+      font-size: 12px; color: var(--muted); background: transparent;
+      border: none; padding: 2px 6px; cursor: pointer; white-space: nowrap;
+      transition: color 0.12s;
+    }
+    .rp-chip:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
 
     /* 侧边导航 */
     .tab-btn { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px; font-size: 13px; font-weight: 500; color: var(--muted); transition: all 0.12s; border: 1px solid transparent; }
@@ -265,13 +271,13 @@
         <div class="p-4 bg-white border-t border-[var(--hairline)]">
           <div class="max-w-4xl mx-auto space-y-2">
             <!-- 快捷指令建议 -->
-            <div class="flex items-center space-x-2 text-xs overflow-x-auto pb-1 text-[var(--muted)] custom-scrollbar">
-              <span class="text-[var(--faint)] flex-shrink-0"><i class="fa-regular fa-lightbulb"></i> 尝试输入:</span>
-              <button onclick="fillChatInput('我平时最喜欢喝拿铁咖啡，每天早上需要一杯')" class="rp-btn rp-btn-outline rp-btn-sm flex-shrink-0">☕ 记录习惯</button>
-              <button onclick="fillChatInput('创建一个任务：完成系统前后端联调测试')" class="rp-btn rp-btn-outline rp-btn-sm flex-shrink-0">📝 拟定任务补丁</button>
-              <button onclick="fillChatInput('请根据知识库资料介绍一下相关背景')" class="rp-btn rp-btn-outline rp-btn-sm flex-shrink-0">📚 知识库检索</button>
-              <button onclick="fillChatInput('同步任务：1. 修复文件上传400异常；2. 增加补丁实体状态机；3. 完善记忆检索过滤')" class="rp-btn rp-btn-outline rp-btn-sm flex-shrink-0">🔄 批量同步草稿</button>
-              <button onclick="fillChatInput('!search 今天有什么大新闻')" class="rp-btn rp-btn-outline rp-btn-sm flex-shrink-0">🌐 联网搜索</button>
+            <div class="flex items-center space-x-1 text-xs overflow-x-auto pb-1 text-[var(--muted)] custom-scrollbar">
+              <span class="text-[var(--faint)] flex-shrink-0">尝试输入</span>
+              <button onclick="fillChatInput('我平时最喜欢喝拿铁咖啡，每天早上需要一杯')" class="rp-chip">记录习惯</button>
+              <button onclick="fillChatInput('创建一个任务：完成系统前后端联调测试')" class="rp-chip">拟定任务补丁</button>
+              <button onclick="fillChatInput('请根据知识库资料介绍一下相关背景')" class="rp-chip">知识库检索</button>
+              <button onclick="fillChatInput('同步任务：1. 修复文件上传400异常；2. 增加补丁实体状态机；3. 完善记忆检索过滤')" class="rp-chip">批量同步草稿</button>
+              <button onclick="fillChatInput('!search 今天有什么大新闻')" class="rp-chip">联网搜索</button>
             </div>
 
             <!-- 输入表单 -->
