@@ -1,13 +1,23 @@
-"""用户级大五人格档案：识别 -> 工作风格 -> 秘书督促策略。"""
+"""用户级大五人格档案（集中库版）：识别 -> 工作风格 -> 秘书督促策略。
+
+所有用户画像统一存放在集中库（默认 SQLite: <data>/users.db，
+生产可配置 DATABASE_URL 切换 PostgreSQL），profiles/observations 均带 user_id。
+对外接口与旧版完全一致。
+"""
 
 from __future__ import annotations
 
 import json
 import os
-import sqlite3
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from sqlalchemy import select
+
+from storage.db import get_session, init_db
+from storage.models import PersonalityObservationRow, PersonalityProfileRow
 
 from .bert_encoder import BertPersonalityEncoder
 from .heuristic import heuristic_scores
@@ -27,17 +37,18 @@ def _now() -> str:
 
 def _safe_id(value: str | int | None) -> str:
     raw = str(value or "default").strip()
-    import re
-
     raw = re.sub(r"[^A-Za-z0-9_.-]+", "_", raw)
     return raw[:80] or "default"
 
 
 class PersonalityService:
     def __init__(self, data_dir: str | Path | None = None, encoder: BertPersonalityEncoder | None = None):
-        root = Path(data_dir or os.getenv("MYAGENT_DATA_DIR", Path(__file__).resolve().parents[1] / "data"))
-        self.root = root / "users"
+        self._data_dir = Path(data_dir) if data_dir is not None else Path(
+            os.getenv("MYAGENT_DATA_DIR", Path(__file__).resolve().parents[1] / "data")
+        )
+        self.root = self._data_dir / "users"
         self.root.mkdir(parents=True, exist_ok=True)
+        init_db(self._data_dir)
         self.encoder = encoder if encoder is not None else BertPersonalityEncoder(autoload=False)
 
     def user_dir(self, user_id: str | int | None) -> Path:
@@ -45,45 +56,22 @@ class PersonalityService:
         path.mkdir(parents=True, exist_ok=True)
         return path
 
-    def _connect(self, user_id: str | int | None) -> sqlite3.Connection:
-        db = self.user_dir(user_id) / "personality.sqlite3"
-        conn = sqlite3.connect(db)
-        conn.row_factory = sqlite3.Row
-        conn.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS profiles (
-                user_id TEXT PRIMARY KEY,
-                scores_json TEXT NOT NULL,
-                samples INTEGER NOT NULL DEFAULT 0,
-                backend TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS observations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                text TEXT NOT NULL,
-                scores_json TEXT NOT NULL,
-                backend TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            );
-            """
-        )
-        return conn
-
-    def _load_scores(self, conn: sqlite3.Connection, user_id: str) -> tuple[dict[str, float], int, str]:
-        row = conn.execute("SELECT * FROM profiles WHERE user_id=?", (user_id,)).fetchone()
+    def _load_scores(self, session, user_id: str) -> tuple[dict[str, float], int, str]:  # noqa: ANN001
+        row = session.execute(
+            select(PersonalityProfileRow).where(PersonalityProfileRow.user_id == user_id)
+        ).scalar_one_or_none()
         if not row:
             return {key: 0.5 for key in TRAIT_ORDER}, 0, "none"
-        scores = json.loads(row["scores_json"])
-        return {key: float(scores.get(key, 0.5)) for key in TRAIT_ORDER}, int(row["samples"]), str(row["backend"])
+        scores = json.loads(row.scores_json)
+        return {key: float(scores.get(key, 0.5)) for key in TRAIT_ORDER}, int(row.samples), str(row.backend)
 
     def observe(self, user_id: str, text: str) -> dict[str, Any]:
         uid = _safe_id(user_id)
         text = (text or "").strip()
         if len(text) < 8:
             return self.get_profile(uid)
-        conn = self._connect(uid)
-        try:
-            prior, samples, _backend = self._load_scores(conn, uid)
+        with get_session(self._data_dir) as session:
+            prior, samples, _backend = self._load_scores(session, uid)
             bert_scores = self.encoder.score(text) if self.encoder.available else {}
             heuristic = heuristic_scores(text, prior)
             if bert_scores:
@@ -102,35 +90,39 @@ class PersonalityService:
             blended = {key: clamp01(prior[key] * (1 - alpha) + instant[key] * alpha) for key in TRAIT_ORDER}
             blended = {key: round(blended[key], 4) for key in TRAIT_ORDER}
             now = _now()
-            conn.execute(
-                "INSERT INTO observations(text, scores_json, backend, created_at) VALUES (?, ?, ?, ?)",
-                (text[:2000], json.dumps(instant, ensure_ascii=False), backend, now),
-            )
-            conn.execute(
-                """
-                INSERT INTO profiles(user_id, scores_json, samples, backend, updated_at)
-                VALUES (?, ?, 1, ?, ?)
-                ON CONFLICT(user_id) DO UPDATE SET
-                    scores_json=excluded.scores_json,
-                    samples=samples+1,
-                    backend=excluded.backend,
-                    updated_at=excluded.updated_at
-                """,
-                (uid, json.dumps(blended, ensure_ascii=False), backend, now),
-            )
-            conn.commit()
-            return self._pack(uid, blended, samples + 1, backend)
-        finally:
-            conn.close()
+            session.add(PersonalityObservationRow(
+                user_id=uid,
+                text=text[:2000],
+                scores_json=json.dumps(instant, ensure_ascii=False),
+                backend=backend,
+                created_at=now,
+            ))
+            profile = session.execute(
+                select(PersonalityProfileRow).where(PersonalityProfileRow.user_id == uid)
+            ).scalar_one_or_none()
+            if profile is None:
+                session.add(PersonalityProfileRow(
+                    user_id=uid,
+                    scores_json=json.dumps(blended, ensure_ascii=False),
+                    samples=1,
+                    backend=backend,
+                    updated_at=now,
+                ))
+                new_samples = 1
+            else:
+                profile.scores_json = json.dumps(blended, ensure_ascii=False)
+                profile.samples += 1
+                profile.backend = backend
+                profile.updated_at = now
+                new_samples = profile.samples
+            session.commit()
+            return self._pack(uid, blended, new_samples, backend)
 
     def get_profile(self, user_id: str) -> dict[str, Any]:
         uid = _safe_id(user_id)
-        conn = self._connect(uid)
-        try:
-            scores, samples, backend = self._load_scores(conn, uid)
+        with get_session(self._data_dir) as session:
+            scores, samples, backend = self._load_scores(session, uid)
             return self._pack(uid, scores, samples, backend if samples else ("bert" if self.encoder.available else "heuristic"))
-        finally:
-            conn.close()
 
     def _pack(self, user_id: str, scores: dict[str, float], samples: int, backend: str) -> dict[str, Any]:
         work = derive_work_style(scores)
