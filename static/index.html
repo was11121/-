@@ -11,72 +11,160 @@
   <!-- Marked.js 用于 Markdown 渲染 -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+    /* ============ Claude / Anthropic 设计 Token ============ */
+    :root {
+      --ink: #141413;
+      --cream: #faf9f5;
+      --cream-deep: #f0ede6;
+      --paper: #ffffff;
+      --hairline: #e5e1d8;
+      --hairline-strong: #d6d1c6;
+      --muted: #6f6a5e;
+      --faint: #a8a294;
+      --clay: #d97757;
+      --clay-deep: #c05f3e;
+      --danger: #b3261e;
+    }
+    html { background: var(--cream); }
     body {
-      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      background: var(--cream);
+      color: var(--ink);
     }
-    code, pre {
-      font-family: 'JetBrains Mono', monospace;
+    .font-serif-editorial { font-family: Georgia, "Times New Roman", serif; }
+    .font-mono-label {
+      font-family: "JetBrains Mono", Consolas, monospace;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 10px;
     }
-    .custom-scrollbar::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
+    code, pre { font-family: 'JetBrains Mono', Consolas, monospace; }
+
+    /* 直角：所有按钮/输入框/卡片/页签 */
+    button, input, select, textarea, .rp-card, .rp-panel, .tab-btn, .lane-col, .badge {
+      border-radius: 0 !important;
     }
-    .custom-scrollbar::-webkit-scrollbar-track {
-      background: rgba(15, 23, 42, 0.6);
+
+    /* 按钮体系 */
+    .rp-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: 6px; font-size: 13px; font-weight: 500;
+      padding: 8px 16px; cursor: pointer; transition: all 0.12s ease;
+      border: 1px solid transparent;
     }
-    .custom-scrollbar::-webkit-scrollbar-thumb {
-      background: rgba(51, 65, 85, 0.8);
-      border-radius: 9999px;
+    .rp-btn-dark { background: var(--ink); color: var(--cream); border-color: var(--ink); }
+    .rp-btn-dark:hover { background: #000; }
+    .rp-btn-outline { background: transparent; color: var(--ink); border-color: var(--hairline-strong); }
+    .rp-btn-outline:hover { border-color: var(--ink); background: var(--cream-deep); }
+    .rp-btn-ghost { background: transparent; color: var(--muted); border-color: transparent; }
+    .rp-btn-ghost:hover { color: var(--ink); background: var(--cream-deep); }
+    .rp-btn-danger { background: transparent; color: var(--danger); border-color: #e2b6b2; }
+    .rp-btn-danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+    .rp-btn-sm { padding: 4px 10px; font-size: 12px; gap: 4px; }
+    .rp-btn-block { width: 100%; }
+
+    /* 输入框 */
+    .rp-input, .rp-textarea {
+      background: var(--paper); border: 1px solid var(--hairline-strong);
+      padding: 8px 12px; font-size: 13px; color: var(--ink); width: 100%;
+      outline: none; transition: border-color 0.12s, box-shadow 0.12s;
     }
+    .rp-input:focus, .rp-textarea:focus {
+      border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink);
+    }
+    .rp-input::placeholder, .rp-textarea::placeholder { color: var(--faint); }
+
+    /* 卡片 / 面板 */
+    .rp-card { background: var(--paper); border: 1px solid var(--hairline); }
+    .rp-panel { background: var(--cream-deep); border: 1px solid var(--hairline); }
+    .rp-eyebrow { font-family: "JetBrains Mono", Consolas, monospace; text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; color: var(--muted); }
+
+    /* 侧边导航 */
+    .tab-btn { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px; font-size: 13px; font-weight: 500; color: var(--muted); transition: all 0.12s; border: 1px solid transparent; }
+    .tab-btn:hover { background: var(--cream-deep); color: var(--ink); }
+    .tab-btn-active { background: var(--ink) !important; color: var(--cream) !important; }
+
+    /* 状态徽标：等宽 + 边框 + 圆点 */
+    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border: 1px solid var(--hairline-strong); font-family: "JetBrains Mono", Consolas, monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); background: transparent; }
+    .badge::before { content: ''; width: 6px; height: 6px; border-radius: 9999px; background: var(--faint); display: inline-block; }
+    .badge-ok::before { background: #3f7d4e; }
+    .badge-warn::before { background: var(--clay); }
+    .badge-err::before { background: var(--danger); }
+    .badge-info::before { background: #5d7f9e; }
+
+    /* 页签切换：文字 + 下划线 */
+    .tabs-line { display: flex; gap: 24px; border-bottom: 1px solid var(--hairline); }
+    .tabs-line .tab-line-btn { padding: 8px 2px; font-size: 13px; font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent; cursor: pointer; }
+    .tabs-line .tab-line-btn:hover { color: var(--ink); }
+    .tab-line-btn-active { color: var(--ink) !important; border-bottom-color: var(--ink) !important; }
+
+    /* 表格 */
+    .rp-table { width: 100%; font-size: 12px; border-collapse: collapse; color: var(--ink); }
+    .rp-table th { text-align: left; padding: 10px 12px; font-weight: 500; color: var(--muted); border-bottom: 1px solid var(--hairline-strong); }
+    .rp-table td { padding: 10px 12px; border-bottom: 1px solid var(--hairline); }
+    .rp-table tbody tr:hover { background: var(--cream-deep); }
+
+    /* 滚动条 */
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--hairline-strong); border-radius: 0; }
     .prose p { margin-bottom: 0.5rem; }
     .prose ul { list-style-type: disc; margin-left: 1.25rem; margin-bottom: 0.5rem; }
     .prose ol { list-style-type: decimal; margin-left: 1.25rem; margin-bottom: 0.5rem; }
+    .prose a { color: var(--clay-deep); text-decoration: underline; }
+    .prose strong { color: var(--ink); }
+
+    /* 泳道 */
+    .lane-col { background: var(--cream-deep); border: 1px solid var(--hairline); padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+    .lane-card { background: var(--paper); border: 1px solid var(--hairline); padding: 10px 12px; }
+
+    /* 进度条 */
+    .rp-bar { height: 4px; background: var(--cream-deep); border-radius: 0; overflow: hidden; }
+    .rp-bar > div { height: 100%; background: var(--ink); }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-indigo-500 selection:text-white">
+<body class="min-h-screen flex flex-col antialiased">
 
   <!-- 顶部导航栏 -->
-  <header class="bg-slate-900/80 backdrop-blur border-b border-slate-800 sticky top-0 z-50 px-6 py-3.5 flex items-center justify-between shadow-lg">
+  <header class="bg-white border-b border-[var(--hairline)] sticky top-0 z-50 px-6 py-3.5 flex items-center justify-between">
     <div class="flex items-center space-x-3">
-      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-        <i class="fa-solid fa-atom text-white text-lg"></i>
+      <div class="w-9 h-9 bg-[var(--ink)] flex items-center justify-center">
+        <i class="fa-solid fa-atom text-[var(--cream)] text-lg"></i>
       </div>
       <div>
-        <h1 class="text-base font-bold tracking-tight text-white flex items-center space-x-2">
+        <h1 class="text-base font-serif-editorial font-bold tracking-tight text-[var(--ink)] flex items-center space-x-2">
           <span>MyAgent Unified</span>
-          <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">RealityPatch Core</span>
+          <span class="font-mono-label px-2 py-0.5 bg-[var(--cream-deep)] text-[var(--muted)] border border-[var(--hairline)]">RealityPatch Core</span>
         </h1>
-        <p class="text-xs text-slate-400">用户记忆 · 权威知识库 · 项目秘书 · 现实补丁</p>
+        <p class="text-xs text-[var(--muted)]">用户记忆 · 权威知识库 · 项目秘书 · 现实补丁 · 联网搜索</p>
       </div>
     </div>
 
     <!-- 用户与工作区上下文切换 -->
     <div class="flex items-center space-x-3">
-      <div id="authUserBar" class="hidden items-center bg-slate-800/80 rounded-lg px-3 py-1.5 border border-slate-700/60 text-xs space-x-2">
-        <i class="fa-regular fa-user text-indigo-400"></i>
-        <span id="authDisplayName" class="text-white font-medium">未登录</span>
-        <span id="authRoleBadge" class="px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">user</span>
+      <div id="authUserBar" class="hidden items-center bg-[var(--cream-deep)] px-3 py-1.5 border border-[var(--hairline)] text-xs space-x-2">
+        <i class="fa-regular fa-user text-[var(--ink)]"></i>
+        <span id="authDisplayName" class="text-[var(--ink)] font-medium">未登录</span>
+        <span id="authRoleBadge" class="px-1.5 py-0.5 bg-white text-[var(--muted)] border border-[var(--hairline-strong)] font-mono-label">user</span>
       </div>
 
-      <div id="adminUserSwitcher" class="hidden items-center bg-slate-800/80 rounded-lg px-3 py-1.5 border border-amber-500/30 text-xs space-x-2">
-        <i class="fa-solid fa-user-secret text-amber-400"></i>
-        <span class="text-slate-400">画像目标:</span>
-        <select id="adminTargetSelect" onchange="onAdminTargetChange()" class="bg-transparent text-white font-medium focus:outline-none max-w-[120px]"></select>
+      <div id="adminUserSwitcher" class="hidden items-center bg-[var(--cream-deep)] px-3 py-1.5 border border-[var(--hairline)] text-xs space-x-2">
+        <i class="fa-solid fa-user-secret text-[var(--clay)]"></i>
+        <span class="text-[var(--muted)]">画像目标:</span>
+        <select id="adminTargetSelect" onchange="onAdminTargetChange()" class="bg-transparent text-[var(--ink)] font-medium focus:outline-none max-w-[120px]"></select>
       </div>
 
-      <div class="flex items-center bg-slate-800/80 rounded-lg px-3 py-1.5 border border-slate-700/60 text-xs space-x-2">
-        <i class="fa-solid fa-folder-tree text-cyan-400"></i>
-        <span class="text-slate-400">工作区:</span>
-        <input id="workspaceIdInput" type="text" value="default" class="bg-transparent text-white font-medium focus:outline-none w-24 border-b border-slate-600 focus:border-cyan-400 text-center transition" title="输入项目工作区ID" />
+      <div class="flex items-center bg-[var(--cream-deep)] px-3 py-1.5 border border-[var(--hairline)] text-xs space-x-2">
+        <i class="fa-solid fa-folder-tree text-[var(--ink)]"></i>
+        <span class="text-[var(--muted)]">工作区:</span>
+        <input id="workspaceIdInput" type="text" value="default" class="bg-transparent text-[var(--ink)] font-medium focus:outline-none w-24 border-b border-[var(--hairline-strong)] focus:border-[var(--ink)] text-center transition" title="输入项目工作区ID" />
       </div>
 
-      <button id="logoutBtn" onclick="handleLogout()" class="hidden px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-600/80 text-slate-300 hover:text-white text-xs border border-slate-700 transition">
+      <button id="logoutBtn" onclick="handleLogout()" class="hidden rp-btn rp-btn-outline rp-btn-sm">
         <i class="fa-solid fa-right-from-bracket mr-1"></i>退出
       </button>
 
-      <div id="healthBadge" class="flex items-center space-x-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
-        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+      <div id="healthBadge" class="badge badge-ok">
         <span id="healthText">服务就绪</span>
       </div>
     </div>
@@ -85,62 +173,63 @@
   <!-- 主应用体：侧边标签页 + 主内容区 -->
   <div class="flex-1 flex overflow-hidden">
     <!-- 侧边导航栏 -->
-    <nav class="w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between p-4 select-none">
+    <nav class="w-64 bg-[var(--cream-deep)] border-r border-[var(--hairline)] flex flex-col justify-between p-4 select-none">
       <div class="space-y-1.5">
-        <button onclick="switchTab('chat')" id="tabBtn-chat" class="tab-btn w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition duration-150 bg-indigo-600 text-white shadow-md shadow-indigo-600/20">
+        <div class="rp-eyebrow mb-2 px-2">Modules</div>
+        <button onclick="switchTab('chat')" id="tabBtn-chat" class="tab-btn tab-btn-active">
           <i class="fa-solid fa-comments w-5 text-center"></i>
           <span>智能交互工作台</span>
         </button>
 
-        <button onclick="switchTab('kanban')" id="tabBtn-kanban" class="tab-btn w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition duration-150 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60">
+        <button onclick="switchTab('kanban')" id="tabBtn-kanban" class="tab-btn">
           <i class="fa-solid fa-table-columns w-5 text-center"></i>
           <span>秘书看板与补丁</span>
         </button>
 
-        <button onclick="switchTab('library')" id="tabBtn-library" class="tab-btn w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition duration-150 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60">
+        <button onclick="switchTab('library')" id="tabBtn-library" class="tab-btn">
           <i class="fa-solid fa-book-bookmark w-5 text-center"></i>
           <span>文档知识库</span>
         </button>
 
-        <button onclick="switchTab('memory')" id="tabBtn-memory" class="tab-btn w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition duration-150 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60">
+        <button onclick="switchTab('memory')" id="tabBtn-memory" class="tab-btn">
           <i class="fa-solid fa-brain w-5 text-center"></i>
           <span>用户记忆与画像</span>
         </button>
 
-        <button onclick="switchTab('web')" id="tabBtn-web" class="tab-btn w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition duration-150 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60">
+        <button onclick="switchTab('web')" id="tabBtn-web" class="tab-btn">
           <i class="fa-solid fa-globe w-5 text-center"></i>
           <span>联网搜索</span>
         </button>
       </div>
 
       <!-- 底部系统与模型状态信息卡 -->
-      <div class="bg-slate-950/80 rounded-xl p-3.5 border border-slate-800/80 space-y-2 text-xs">
-        <div class="flex items-center justify-between text-slate-400">
+      <div class="bg-white p-3.5 border border-[var(--hairline)] space-y-2 text-xs">
+        <div class="flex items-center justify-between text-[var(--muted)]">
           <span class="flex items-center space-x-1.5">
-            <i class="fa-solid fa-microchip text-slate-500"></i>
+            <i class="fa-solid fa-microchip text-[var(--faint)]"></i>
             <span>认知引擎:</span>
           </span>
-          <span id="cogEngineName" class="text-slate-200 font-mono font-medium">PythonEngine</span>
+          <span id="cogEngineName" class="text-[var(--ink)] font-mono font-medium">PythonEngine</span>
         </div>
-        <div class="flex items-center justify-between text-slate-400">
+        <div class="flex items-center justify-between text-[var(--muted)]">
           <span class="flex items-center space-x-1.5">
-            <i class="fa-solid fa-bolt text-amber-400"></i>
+            <i class="fa-solid fa-bolt text-[var(--clay)]"></i>
             <span>接入模型:</span>
           </span>
-          <span class="text-slate-200 font-mono truncate max-w-[110px]" title="deepseek-v4-flash @ poke2api">deepseek-v4-flash</span>
+          <span class="text-[var(--ink)] font-mono truncate max-w-[110px]" title="deepseek-v4-flash @ poke2api">deepseek-v4-flash</span>
         </div>
-        <div class="flex items-center justify-between text-slate-400 pt-1 border-t border-slate-800/60">
+        <div class="flex items-center justify-between text-[var(--muted)] pt-1 border-t border-[var(--hairline)]">
           <span>流式 SSE:</span>
           <label class="relative inline-flex items-center cursor-pointer">
             <input type="checkbox" id="streamToggle" class="sr-only peer" checked>
-            <div class="w-8 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3.5 after:transition-all peer-checked:bg-indigo-600"></div>
+            <div class="w-8 h-4 bg-[var(--hairline-strong)] peer-checked:bg-[var(--ink)] peer-focus:outline-none peer-focus:ring-1 peer-focus:ring-[var(--ink)] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-3 after:w-3.5 after:transition-all"></div>
           </label>
         </div>
       </div>
     </nav>
 
     <!-- 核心内容展示区 -->
-    <main class="flex-1 bg-slate-950 flex flex-col overflow-hidden relative">
+    <main class="flex-1 bg-[var(--cream)] flex flex-col overflow-hidden relative">
 
       <!-- ================= TAB 1: 智能交互工作台 (Chat) ================= -->
       <section id="tab-chat" class="tab-pane flex-1 flex flex-col h-full overflow-hidden">
@@ -148,22 +237,22 @@
         <div id="chatMessages" class="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
           <!-- 欢迎消息 -->
           <div class="flex items-start space-x-3.5 max-w-3xl">
-            <div class="w-8 h-8 rounded-lg bg-indigo-600 flex-shrink-0 flex items-center justify-center text-white text-sm shadow-md">
+            <div class="w-8 h-8 bg-[var(--ink)] flex-shrink-0 flex items-center justify-center text-[var(--cream)] text-sm">
               <i class="fa-solid fa-robot"></i>
             </div>
             <div class="space-y-2">
-              <div class="bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-sm px-4 py-3 text-slate-200 text-sm shadow-sm prose leading-relaxed">
+              <div class="bg-white border border-[var(--hairline)] px-4 py-3 text-[var(--ink)] text-sm prose leading-relaxed">
                 您好！我是 <strong>MyAgent Unified 现实补丁智能体</strong>。<br />
                 我具备以下核心能力：
                 <ul class="mt-2 space-y-1">
                   <li><strong>用户个性化记忆</strong>：自动沉淀您的偏好、指令与身份，支持反馈与遗忘。</li>
                   <li><strong>权威知识库检索</strong>：支持多格式文件上传与引用溯源。</li>
-                  <li><strong>联网实时搜索</strong>：搜索关键词、读取网页，随时获取最新信息（试试 <span class="text-cyan-300 font-mono">!search 新闻</span>）。</li>
+                  <li><strong>联网实时搜索</strong>：搜索关键词、读取网页，随时获取最新信息（试试 <span class="font-mono text-[var(--clay-deep)]">!search 新闻</span>）。</li>
                   <li><strong>现实补丁与项目秘书</strong>：智能解析任务与会议进展，支持「草稿 &rarr; 确认 &rarr; 回滚」安全状态机。</li>
                   <li><strong>启发式 Tip 提示</strong>：主动捕捉潜在循环与决策风险。</li>
                 </ul>
               </div>
-              <div class="text-[11px] text-slate-500 flex items-center space-x-2">
+              <div class="text-[11px] text-[var(--muted)] flex items-center space-x-2">
                 <span>System Agent</span>
                 <span>•</span>
                 <span>Ready</span>
@@ -173,16 +262,16 @@
         </div>
 
         <!-- 底部输入框 -->
-        <div class="p-4 bg-slate-900/90 border-t border-slate-800">
+        <div class="p-4 bg-white border-t border-[var(--hairline)]">
           <div class="max-w-4xl mx-auto space-y-2">
             <!-- 快捷指令建议 -->
-            <div class="flex items-center space-x-2 text-xs overflow-x-auto pb-1 text-slate-400 custom-scrollbar">
-              <span class="text-slate-500 flex-shrink-0"><i class="fa-regular fa-lightbulb"></i> 尝试输入:</span>
-              <button onclick="fillChatInput('我平时最喜欢喝拿铁咖啡，每天早上需要一杯')" class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 hover:text-white transition flex-shrink-0">☕ 记录习惯</button>
-              <button onclick="fillChatInput('创建一个任务：完成系统前后端联调测试')" class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 hover:text-white transition flex-shrink-0">📝 拟定任务补丁</button>
-              <button onclick="fillChatInput('请根据知识库资料介绍一下相关背景')" class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 hover:text-white transition flex-shrink-0">📚 知识库检索</button>
-              <button onclick="fillChatInput('同步任务：1. 修复文件上传400异常；2. 增加补丁实体状态机；3. 完善记忆检索过滤')" class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 hover:text-white transition flex-shrink-0">🔄 批量同步草稿</button>
-              <button onclick="fillChatInput('!search 今天有什么大新闻')" class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 hover:text-white transition flex-shrink-0">🌐 联网搜索</button>
+            <div class="flex items-center space-x-2 text-xs overflow-x-auto pb-1 text-[var(--muted)] custom-scrollbar">
+              <span class="text-[var(--faint)] flex-shrink-0"><i class="fa-regular fa-lightbulb"></i> 尝试输入:</span>
+              <button onclick="fillChatInput('我平时最喜欢喝拿铁咖啡，每天早上需要一杯')" class="rp-btn rp-btn-outline rp-btn-sm flex-shrink-0">☕ 记录习惯</button>
+              <button onclick="fillChatInput('创建一个任务：完成系统前后端联调测试')" class="rp-btn rp-btn-outline rp-btn-sm flex-shrink-0">📝 拟定任务补丁</button>
+              <button onclick="fillChatInput('请根据知识库资料介绍一下相关背景')" class="rp-btn rp-btn-outline rp-btn-sm flex-shrink-0">📚 知识库检索</button>
+              <button onclick="fillChatInput('同步任务：1. 修复文件上传400异常；2. 增加补丁实体状态机；3. 完善记忆检索过滤')" class="rp-btn rp-btn-outline rp-btn-sm flex-shrink-0">🔄 批量同步草稿</button>
+              <button onclick="fillChatInput('!search 今天有什么大新闻')" class="rp-btn rp-btn-outline rp-btn-sm flex-shrink-0">🌐 联网搜索</button>
             </div>
 
             <!-- 输入表单 -->
@@ -191,13 +280,13 @@
                 id="chatInput"
                 type="text"
                 placeholder="与 Agent 对话、下发任务或询问知识库..."
-                class="w-full bg-slate-950 border border-slate-700 focus:border-indigo-500 rounded-xl pl-4 pr-28 py-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition shadow-inner"
+                class="rp-input pl-4 pr-28 py-3 text-sm"
               />
               <div class="absolute right-2 flex items-center space-x-1.5">
                 <button
                   type="submit"
                   id="sendBtn"
-                  class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-medium text-xs flex items-center space-x-1.5 transition shadow-md shadow-indigo-600/20"
+                  class="rp-btn rp-btn-dark text-xs"
                 >
                   <span>发送</span>
                   <i class="fa-solid fa-arrow-up text-xs"></i>
@@ -211,15 +300,15 @@
       <!-- ================= TAB 2: 秘书看板与补丁 (Kanban) ================= -->
       <section id="tab-kanban" class="tab-pane hidden flex-1 flex flex-col h-full p-6 overflow-y-auto custom-scrollbar space-y-6">
         <!-- 看板头部概览 -->
-        <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+        <div class="flex items-center justify-between pb-4 border-b border-[var(--hairline)]">
           <div>
-            <h2 class="text-xl font-bold text-white flex items-center space-x-2">
-              <i class="fa-solid fa-table-columns text-indigo-400"></i>
+            <h2 class="text-xl font-serif-editorial font-bold text-[var(--ink)] flex items-center space-x-2">
+              <i class="fa-solid fa-table-columns text-[var(--ink)]"></i>
               <span>项目任务看板 & 现实补丁管理</span>
             </h2>
-            <p class="text-xs text-slate-400 mt-1">支持现实补丁（RealityPatch）原子确认与回滚，保障多渠道操作的一致性与可审计性。</p>
+            <p class="text-xs text-[var(--muted)] mt-1">支持现实补丁（RealityPatch）原子确认与回滚，保障多渠道操作的一致性与可审计性。</p>
           </div>
-          <button onclick="loadDashboard()" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center space-x-1.5 transition border border-slate-700">
+          <button onclick="loadDashboard()" class="rp-btn rp-btn-outline rp-btn-sm">
             <i class="fa-solid fa-rotate text-xs"></i>
             <span>刷新看板</span>
           </button>
@@ -227,100 +316,100 @@
 
         <!-- 任务统计卡片 -->
         <div class="grid grid-cols-4 gap-4">
-          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+          <div class="rp-card p-4 flex items-center justify-between">
             <div>
-              <p class="text-xs font-medium text-slate-400">待办任务 (Todo)</p>
-              <h3 id="countTodo" class="text-2xl font-bold text-slate-100 mt-1">0</h3>
+              <p class="text-xs font-medium text-[var(--muted)]">待办任务 (Todo)</p>
+              <h3 id="countTodo" class="text-2xl font-serif-editorial font-bold text-[var(--ink)] mt-1">0</h3>
             </div>
-            <div class="w-10 h-10 rounded-lg bg-slate-800 text-slate-400 flex items-center justify-center text-lg"><i class="fa-regular fa-circle-dot"></i></div>
+            <div class="w-10 h-10 bg-[var(--cream-deep)] text-[var(--muted)] flex items-center justify-center text-lg"><i class="fa-regular fa-circle-dot"></i></div>
           </div>
-          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+          <div class="rp-card p-4 flex items-center justify-between">
             <div>
-              <p class="text-xs font-medium text-indigo-400">进行中 (In Progress)</p>
-              <h3 id="countInProgress" class="text-2xl font-bold text-indigo-300 mt-1">0</h3>
+              <p class="text-xs font-medium text-[var(--muted)]">进行中 (In Progress)</p>
+              <h3 id="countInProgress" class="text-2xl font-serif-editorial font-bold text-[var(--ink)] mt-1">0</h3>
             </div>
-            <div class="w-10 h-10 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center text-lg"><i class="fa-solid fa-spinner animate-spin"></i></div>
+            <div class="w-10 h-10 bg-[var(--cream-deep)] text-[var(--clay)] flex items-center justify-center text-lg"><i class="fa-solid fa-spinner animate-spin"></i></div>
           </div>
-          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+          <div class="rp-card p-4 flex items-center justify-between">
             <div>
-              <p class="text-xs font-medium text-rose-400">受阻 (Blocked)</p>
-              <h3 id="countBlocked" class="text-2xl font-bold text-rose-300 mt-1">0</h3>
+              <p class="text-xs font-medium text-[var(--muted)]">受阻 (Blocked)</p>
+              <h3 id="countBlocked" class="text-2xl font-serif-editorial font-bold text-[var(--ink)] mt-1">0</h3>
             </div>
-            <div class="w-10 h-10 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center text-lg"><i class="fa-solid fa-circle-exclamation"></i></div>
+            <div class="w-10 h-10 bg-[var(--cream-deep)] text-[var(--danger)] flex items-center justify-center text-lg"><i class="fa-solid fa-circle-exclamation"></i></div>
           </div>
-          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+          <div class="rp-card p-4 flex items-center justify-between">
             <div>
-              <p class="text-xs font-medium text-emerald-400">已完成 (Done)</p>
-              <h3 id="countDone" class="text-2xl font-bold text-emerald-300 mt-1">0</h3>
+              <p class="text-xs font-medium text-[var(--muted)]">已完成 (Done)</p>
+              <h3 id="countDone" class="text-2xl font-serif-editorial font-bold text-[var(--ink)] mt-1">0</h3>
             </div>
-            <div class="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-lg"><i class="fa-solid fa-check-double"></i></div>
+            <div class="w-10 h-10 bg-[var(--cream-deep)] text-[var(--clay-deep)] flex items-center justify-center text-lg"><i class="fa-solid fa-check-double"></i></div>
           </div>
         </div>
 
         <!-- 任务四列泳道 -->
         <div class="grid grid-cols-4 gap-4 flex-1">
           <!-- 列1: Todo -->
-          <div class="bg-slate-900/60 rounded-xl p-3.5 border border-slate-800 flex flex-col space-y-3">
-            <div class="flex items-center justify-between text-xs font-semibold text-slate-300 pb-2 border-b border-slate-800">
-              <span class="flex items-center space-x-1.5"><span class="w-2 h-2 rounded-full bg-slate-400"></span><span>待办 (Todo)</span></span>
-              <span id="badgeTodo" class="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">0</span>
+          <div class="lane-col">
+            <div class="flex items-center justify-between text-xs font-semibold text-[var(--ink)] pb-2 border-b border-[var(--hairline)]">
+              <span class="flex items-center space-x-1.5"><span class="badge-dot w-2 h-2 rounded-full bg-[var(--faint)]"></span><span>待办 (Todo)</span></span>
+              <span id="badgeTodo" class="badge">0</span>
             </div>
             <div id="laneTodo" class="space-y-2.5 flex-1 min-h-[160px] custom-scrollbar overflow-y-auto"></div>
           </div>
 
           <!-- 列2: In Progress -->
-          <div class="bg-slate-900/60 rounded-xl p-3.5 border border-slate-800 flex flex-col space-y-3">
-            <div class="flex items-center justify-between text-xs font-semibold text-indigo-300 pb-2 border-b border-slate-800">
-              <span class="flex items-center space-x-1.5"><span class="w-2 h-2 rounded-full bg-indigo-400"></span><span>进行中 (In Progress)</span></span>
-              <span id="badgeInProgress" class="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400">0</span>
+          <div class="lane-col">
+            <div class="flex items-center justify-between text-xs font-semibold text-[var(--ink)] pb-2 border-b border-[var(--hairline)]">
+              <span class="flex items-center space-x-1.5"><span class="badge-dot w-2 h-2 rounded-full bg-[var(--clay)]"></span><span>进行中 (In Progress)</span></span>
+              <span id="badgeInProgress" class="badge">0</span>
             </div>
             <div id="laneInProgress" class="space-y-2.5 flex-1 min-h-[160px] custom-scrollbar overflow-y-auto"></div>
           </div>
 
           <!-- 列3: Blocked -->
-          <div class="bg-slate-900/60 rounded-xl p-3.5 border border-slate-800 flex flex-col space-y-3">
-            <div class="flex items-center justify-between text-xs font-semibold text-rose-300 pb-2 border-b border-slate-800">
-              <span class="flex items-center space-x-1.5"><span class="w-2 h-2 rounded-full bg-rose-400"></span><span>受阻 (Blocked)</span></span>
-              <span id="badgeBlocked" class="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400">0</span>
+          <div class="lane-col">
+            <div class="flex items-center justify-between text-xs font-semibold text-[var(--ink)] pb-2 border-b border-[var(--hairline)]">
+              <span class="flex items-center space-x-1.5"><span class="badge-dot w-2 h-2 rounded-full bg-[var(--danger)]"></span><span>受阻 (Blocked)</span></span>
+              <span id="badgeBlocked" class="badge">0</span>
             </div>
             <div id="laneBlocked" class="space-y-2.5 flex-1 min-h-[160px] custom-scrollbar overflow-y-auto"></div>
           </div>
 
           <!-- 列4: Done -->
-          <div class="bg-slate-900/60 rounded-xl p-3.5 border border-slate-800 flex flex-col space-y-3">
-            <div class="flex items-center justify-between text-xs font-semibold text-emerald-300 pb-2 border-b border-slate-800">
-              <span class="flex items-center space-x-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400"></span><span>已完成 (Done)</span></span>
-              <span id="badgeDone" class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">0</span>
+          <div class="lane-col">
+            <div class="flex items-center justify-between text-xs font-semibold text-[var(--ink)] pb-2 border-b border-[var(--hairline)]">
+              <span class="flex items-center space-x-1.5"><span class="badge-dot w-2 h-2 rounded-full bg-[#3f7d4e]"></span><span>已完成 (Done)</span></span>
+              <span id="badgeDone" class="badge">0</span>
             </div>
             <div id="laneDone" class="space-y-2.5 flex-1 min-h-[160px] custom-scrollbar overflow-y-auto"></div>
           </div>
         </div>
 
         <!-- 现实补丁审计流与管理 -->
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+        <div class="rp-card p-5 space-y-4">
           <div class="flex items-center justify-between">
-            <h3 class="text-sm font-bold text-white flex items-center space-x-2">
-              <i class="fa-solid fa-file-shield text-cyan-400"></i>
+            <h3 class="text-sm font-serif-editorial font-bold text-[var(--ink)] flex items-center space-x-2">
+              <i class="fa-solid fa-file-shield text-[var(--clay)]"></i>
               <span>现实补丁审计流水 (Reality Patches)</span>
             </h3>
-            <span class="text-xs text-slate-400">补丁确认将写入实体表，回滚将恢复原始状态</span>
+            <span class="text-xs text-[var(--muted)]">补丁确认将写入实体表，回滚将恢复原始状态</span>
           </div>
 
           <div class="overflow-x-auto">
-            <table class="w-full text-left text-xs text-slate-300">
-              <thead class="bg-slate-950 text-slate-400 border-b border-slate-800 font-medium">
+            <table class="rp-table">
+              <thead>
                 <tr>
-                  <th class="p-3">补丁 ID</th>
-                  <th class="p-3">目标类型</th>
-                  <th class="p-3">操作</th>
-                  <th class="p-3">变更提议</th>
-                  <th class="p-3">状态</th>
-                  <th class="p-3">创建者/时间</th>
-                  <th class="p-3 text-right">操作</th>
+                  <th>补丁 ID</th>
+                  <th>目标类型</th>
+                  <th>操作</th>
+                  <th>变更提议</th>
+                  <th>状态</th>
+                  <th>创建者/时间</th>
+                  <th class="text-right">操作</th>
                 </tr>
               </thead>
-              <tbody id="patchTableBody" class="divide-y divide-slate-800/60">
-                <tr><td colspan="7" class="p-4 text-center text-slate-500">暂无补丁数据</td></tr>
+              <tbody id="patchTableBody">
+                <tr><td colspan="7" class="p-4 text-center text-[var(--muted)]">暂无补丁数据</td></tr>
               </tbody>
             </table>
           </div>
@@ -330,15 +419,15 @@
       <!-- ================= TAB 3: 文档知识库 (Library) ================= -->
       <section id="tab-library" class="tab-pane hidden flex-1 flex flex-col h-full p-6 overflow-y-auto custom-scrollbar space-y-6">
         <!-- 头部 -->
-        <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+        <div class="flex items-center justify-between pb-4 border-b border-[var(--hairline)]">
           <div>
-            <h2 class="text-xl font-bold text-white flex items-center space-x-2">
-              <i class="fa-solid fa-book-bookmark text-indigo-400"></i>
+            <h2 class="text-xl font-serif-editorial font-bold text-[var(--ink)] flex items-center space-x-2">
+              <i class="fa-solid fa-book-bookmark text-[var(--ink)]"></i>
               <span>权威文档知识库 (Local Library)</span>
             </h2>
-            <p class="text-xs text-slate-400 mt-1">支持 PDF, DOCX, PPTX, XLSX, TXT, MD, CSV, JSON 格式文档的清洗、SHA-256 去重与全文检索。</p>
+            <p class="text-xs text-[var(--muted)] mt-1">支持 PDF, DOCX, PPTX, XLSX, TXT, MD, CSV, JSON 格式文档的清洗、SHA-256 去重与全文检索。</p>
           </div>
-          <button onclick="loadLibrary()" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center space-x-1.5 transition border border-slate-700">
+          <button onclick="loadLibrary()" class="rp-btn rp-btn-outline rp-btn-sm">
             <i class="fa-solid fa-rotate text-xs"></i>
             <span>刷新库</span>
           </button>
@@ -350,26 +439,26 @@
             <!-- 文件拖拽上传 -->
             <div
               id="dropZone"
-              class="border-2 border-dashed border-slate-700 hover:border-indigo-500 bg-slate-900/60 rounded-xl p-6 text-center cursor-pointer transition flex flex-col items-center justify-center space-y-2"
+              class="border-2 border-dashed border-[var(--hairline-strong)] hover:border-[var(--ink)] bg-white p-6 text-center cursor-pointer transition flex flex-col items-center justify-center space-y-2"
               onclick="document.getElementById('fileUploadInput').click()"
             >
               <input type="file" id="fileUploadInput" class="hidden" onchange="handleFileUpload(event)" />
-              <div class="w-12 h-12 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center text-xl">
+              <div class="w-12 h-12 bg-[var(--cream-deep)] text-[var(--ink)] flex items-center justify-center text-xl">
                 <i class="fa-solid fa-cloud-arrow-up"></i>
               </div>
-              <p class="text-sm font-medium text-slate-200">点击或拖拽文件上传</p>
-              <p class="text-xs text-slate-500">PDF, Word, PPT, Excel, Markdown, TXT 等</p>
+              <p class="text-sm font-medium text-[var(--ink)]">点击或拖拽文件上传</p>
+              <p class="text-xs text-[var(--muted)]">PDF, Word, PPT, Excel, Markdown, TXT 等</p>
             </div>
 
             <!-- 文本录入 -->
-            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
-              <h4 class="text-xs font-bold text-slate-300 flex items-center space-x-1.5">
-                <i class="fa-solid fa-pen-nib text-cyan-400"></i>
+            <div class="rp-card p-4 space-y-3">
+              <h4 class="rp-eyebrow flex items-center space-x-1.5">
+                <i class="fa-solid fa-pen-nib"></i>
                 <span>直接录入文本片段</span>
               </h4>
-              <input id="docTitleInput" type="text" placeholder="文档标题 (如: 运维手册.md)" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500" />
-              <textarea id="docContentInput" rows="4" placeholder="在此输入知识库文本内容..." class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 custom-scrollbar"></textarea>
-              <button onclick="handleTextDocumentIngest()" class="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition shadow-md shadow-indigo-600/20">
+              <input id="docTitleInput" type="text" placeholder="文档标题 (如: 运维手册.md)" class="rp-input" />
+              <textarea id="docContentInput" rows="4" placeholder="在此输入知识库文本内容..." class="rp-textarea custom-scrollbar"></textarea>
+              <button onclick="handleTextDocumentIngest()" class="rp-btn rp-btn-dark rp-btn-block">
                 录入知识库
               </button>
             </div>
@@ -380,28 +469,28 @@
             <!-- 检索栏 -->
             <div class="flex items-center space-x-2">
               <div class="relative flex-1">
-                <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-500 text-xs"></i>
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-[var(--muted)] text-xs"></i>
                 <input
                   id="librarySearchInput"
                   type="text"
                   placeholder="输入关键字进行权威知识检索测试..."
                   onkeyup="if(event.key==='Enter') searchLibrary()"
-                  class="w-full bg-slate-900 border border-slate-800 focus:border-indigo-500 rounded-xl pl-9 pr-4 py-2.5 text-xs text-slate-100 focus:outline-none"
+                  class="rp-input pl-9 pr-4 py-2.5"
                 />
               </div>
-              <button onclick="searchLibrary()" class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-medium transition border border-slate-700">
+              <button onclick="searchLibrary()" class="rp-btn rp-btn-dark rp-btn-sm py-2.5">
                 检索
               </button>
             </div>
 
             <!-- 文档列表 -->
-            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
-              <div class="flex items-center justify-between pb-2 border-b border-slate-800">
-                <span class="text-xs font-bold text-slate-300">已索引文档列表</span>
-                <span id="docCountBadge" class="text-xs text-slate-500">共 0 篇</span>
+            <div class="rp-card p-4 space-y-3">
+              <div class="flex items-center justify-between pb-2 border-b border-[var(--hairline)]">
+                <span class="text-xs font-bold text-[var(--ink)]">已索引文档列表</span>
+                <span id="docCountBadge" class="text-xs text-[var(--muted)]">共 0 篇</span>
               </div>
               <div id="documentList" class="space-y-2 max-h-[380px] overflow-y-auto custom-scrollbar">
-                <p class="text-xs text-slate-500 text-center py-4">暂无文档记录</p>
+                <p class="text-xs text-[var(--muted)] text-center py-4">暂无文档记录</p>
               </div>
             </div>
           </div>
@@ -411,44 +500,44 @@
       <!-- ================= TAB 4: 用户记忆与画像 (Memory) ================= -->
       <section id="tab-memory" class="tab-pane hidden flex-1 flex flex-col h-full p-6 overflow-y-auto custom-scrollbar space-y-6">
         <!-- 头部 -->
-        <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+        <div class="flex items-center justify-between pb-4 border-b border-[var(--hairline)]">
           <div>
-            <h2 class="text-xl font-bold text-white flex items-center space-x-2">
-              <i class="fa-solid fa-brain text-indigo-400"></i>
+            <h2 class="text-xl font-serif-editorial font-bold text-[var(--ink)] flex items-center space-x-2">
+              <i class="fa-solid fa-brain text-[var(--ink)]"></i>
               <span>用户隔离记忆 & 认知画像 (Memory Runtime)</span>
             </h2>
-            <p class="text-xs text-slate-400 mt-1">记忆物理隔离。大五人格用于秘书督促（补短板、扬长处），不会让 Agent 用某种人格口吻说话。</p>
+            <p class="text-xs text-[var(--muted)] mt-1">记忆物理隔离。大五人格用于秘书督促（补短板、扬长处），不会让 Agent 用某种人格口吻说话。</p>
           </div>
-          <button onclick="loadUserMemories(); loadPersonalityProfile()" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center space-x-1.5 transition border border-slate-700">
+          <button onclick="loadUserMemories(); loadPersonalityProfile()" class="rp-btn rp-btn-outline rp-btn-sm">
             <i class="fa-solid fa-rotate text-xs"></i>
             <span>刷新记忆</span>
           </button>
         </div>
 
         <!-- 管理员全用户画像控制台 -->
-        <div id="adminPortraitPanel" class="hidden bg-amber-950/20 border border-amber-500/30 rounded-xl p-4 space-y-3">
+        <div id="adminPortraitPanel" class="hidden rp-panel p-4 space-y-3">
           <div class="flex items-center justify-between">
-            <h3 class="text-sm font-bold text-amber-200 flex items-center space-x-2">
+            <h3 class="text-sm font-serif-editorial font-bold text-[var(--ink)] flex items-center space-x-2">
               <i class="fa-solid fa-user-shield"></i>
               <span>全用户画像控制台（仅管理员）</span>
             </h3>
-            <span id="adminUserCount" class="text-xs text-amber-400/80">0 名用户</span>
+            <span id="adminUserCount" class="text-xs text-[var(--muted)]">0 名用户</span>
           </div>
           <div id="adminUserStatsGrid" class="grid grid-cols-3 gap-3"></div>
         </div>
 
         <!-- 搜索与当前用户概览 -->
-        <div class="flex items-center justify-between bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div class="flex items-center justify-between bg-white border border-[var(--hairline)] p-4">
           <div class="flex items-center space-x-3">
-            <div class="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center text-lg font-bold">
+            <div class="w-10 h-10 bg-[var(--cream-deep)] text-[var(--ink)] flex items-center justify-center text-lg font-bold">
               <i class="fa-solid fa-user-tag"></i>
             </div>
             <div>
-              <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+              <h3 class="text-sm font-bold text-[var(--ink)] flex items-center space-x-2">
                 <span id="currentMemoryUser">alice</span>
-                <span class="text-[10px] px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300">隔离存储空间</span>
+                <span class="text-[10px] px-2 py-0.5 bg-white text-[var(--muted)] border border-[var(--hairline-strong)] font-mono-label">隔离存储空间</span>
               </h3>
-              <p class="text-xs text-slate-400">数据存储于 <code class="text-slate-300 font-mono">data/users/<span id="currentMemoryUserPath">alice</span>/memory.sqlite3</code></p>
+              <p class="text-xs text-[var(--muted)]">数据存储于 <code class="text-[var(--ink)] font-mono">data/users/<span id="currentMemoryUserPath">alice</span>/memory.sqlite3</code></p>
             </div>
           </div>
 
@@ -458,52 +547,52 @@
               type="text"
               placeholder="搜索当前用户记忆 (如: 咖啡)..."
               onkeyup="if(event.key==='Enter') loadUserMemories()"
-              class="bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none w-56"
+              class="rp-input w-56"
             />
-            <button onclick="loadUserMemories()" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition">
+            <button onclick="loadUserMemories()" class="rp-btn rp-btn-outline rp-btn-sm py-2.5">
               搜索
             </button>
           </div>
         </div>
 
         <!-- 大五人格秘书督促档案 -->
-        <div id="personalityPanel" class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-4">
+        <div id="personalityPanel" class="rp-card p-4 space-y-4">
           <div class="flex items-start justify-between gap-3">
             <div>
-              <h3 class="text-sm font-bold text-white flex items-center space-x-2">
-                <i class="fa-solid fa-user-check text-cyan-400"></i>
+              <h3 class="text-sm font-serif-editorial font-bold text-[var(--ink)] flex items-center space-x-2">
+                <i class="fa-solid fa-user-check text-[var(--clay)]"></i>
                 <span>大五人格 · 秘书督促档案</span>
               </h3>
-              <p id="personalityDisclaimer" class="text-[11px] text-slate-500 mt-1">对话积累后生成估计，用于督促工作学习，不是心理诊断。</p>
+              <p id="personalityDisclaimer" class="text-[11px] text-[var(--muted)] mt-1">对话积累后生成估计，用于督促工作学习，不是心理诊断。</p>
             </div>
-            <span id="personalityBackend" class="text-[10px] font-mono text-slate-500">未评估</span>
+            <span id="personalityBackend" class="text-[10px] font-mono text-[var(--muted)]">未评估</span>
           </div>
           <div id="personalityTraitGrid" class="grid grid-cols-5 gap-2"></div>
           <div class="grid grid-cols-2 gap-3 text-xs">
-            <div class="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-1">
-              <div class="text-slate-400">思维倾向</div>
-              <div id="personalityThinking" class="text-slate-100 font-semibold">等待对话样本</div>
-              <p id="personalityThinkingNote" class="text-slate-500 text-[11px] leading-relaxed"></p>
+            <div class="bg-[var(--cream-deep)] border border-[var(--hairline)] p-3 space-y-1">
+              <div class="text-[var(--muted)]">思维倾向</div>
+              <div id="personalityThinking" class="text-[var(--ink)] font-semibold">等待对话样本</div>
+              <p id="personalityThinkingNote" class="text-[var(--muted)] text-[11px] leading-relaxed"></p>
             </div>
-            <div class="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-1">
-              <div class="text-slate-400">执行倾向</div>
-              <div id="personalityExecution" class="text-slate-100 font-semibold">等待对话样本</div>
-              <p id="personalityExecutionNote" class="text-slate-500 text-[11px] leading-relaxed"></p>
+            <div class="bg-[var(--cream-deep)] border border-[var(--hairline)] p-3 space-y-1">
+              <div class="text-[var(--muted)]">执行倾向</div>
+              <div id="personalityExecution" class="text-[var(--ink)] font-semibold">等待对话样本</div>
+              <p id="personalityExecutionNote" class="text-[var(--muted)] text-[11px] leading-relaxed"></p>
             </div>
           </div>
           <div class="grid grid-cols-2 gap-3 text-xs">
             <div>
-              <div class="text-emerald-300/90 font-semibold mb-1">发扬长处</div>
-              <ul id="personalityStrengths" class="space-y-1 text-slate-400"></ul>
+              <div class="text-[#3f7d4e] font-semibold mb-1">发扬长处</div>
+              <ul id="personalityStrengths" class="space-y-1 text-[var(--muted)]"></ul>
             </div>
             <div>
-              <div class="text-amber-300/90 font-semibold mb-1">需要弥补</div>
-              <ul id="personalityGaps" class="space-y-1 text-slate-400"></ul>
+              <div class="text-[var(--clay-deep)] font-semibold mb-1">需要弥补</div>
+              <ul id="personalityGaps" class="space-y-1 text-[var(--muted)]"></ul>
             </div>
           </div>
-          <div class="bg-cyan-950/30 border border-cyan-500/20 rounded-lg p-3 text-xs">
-            <div id="personalityHeadline" class="font-semibold text-cyan-200 mb-1">今日秘书重点</div>
-            <ul id="personalityFocus" class="space-y-1 text-slate-300"></ul>
+          <div class="bg-white border border-[var(--hairline)] p-3 text-xs">
+            <div id="personalityHeadline" class="font-semibold text-[var(--ink)] mb-1">今日秘书重点</div>
+            <ul id="personalityFocus" class="space-y-1 text-[var(--muted)]"></ul>
           </div>
         </div>
 
@@ -515,52 +604,52 @@
 
       <!-- ================= TAB 5: 联网搜索 (Web) ================= -->
       <section id="tab-web" class="tab-pane hidden flex-1 flex flex-col h-full p-6 overflow-y-auto custom-scrollbar space-y-6">
-        <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+        <div class="flex items-center justify-between pb-4 border-b border-[var(--hairline)]">
           <div>
-            <h2 class="text-xl font-bold text-white flex items-center space-x-2">
-              <i class="fa-solid fa-globe text-indigo-400"></i>
+            <h2 class="text-xl font-serif-editorial font-bold text-[var(--ink)] flex items-center space-x-2">
+              <i class="fa-solid fa-globe text-[var(--ink)]"></i>
               <span>联网搜索 (Web Runtime)</span>
             </h2>
-            <p class="text-xs text-slate-400 mt-1">多通道实时检索：searxng → Tavily → 新加坡中转自动故障转移，网页正文经 Jina Reader 读取。</p>
+            <p class="text-xs text-[var(--muted)] mt-1">多通道实时检索：searxng → Tavily → 新加坡中转自动故障转移，网页正文经 Jina Reader 读取。</p>
           </div>
-          <span id="webEngineBadge" class="text-[10px] font-mono text-slate-500">未检索</span>
+          <span id="webEngineBadge" class="text-[10px] font-mono text-[var(--muted)]">未检索</span>
         </div>
 
         <div class="grid grid-cols-3 gap-6">
           <!-- 左列：搜索 / 读网页录入 -->
           <div class="space-y-4">
-            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
-              <h4 class="text-xs font-bold text-slate-300 flex items-center space-x-1.5">
-                <i class="fa-solid fa-magnifying-glass text-cyan-400"></i>
+            <div class="rp-card p-4 space-y-3">
+              <h4 class="rp-eyebrow flex items-center space-x-1.5">
+                <i class="fa-solid fa-magnifying-glass"></i>
                 <span>关键词搜索</span>
               </h4>
-              <input id="webQueryInput" type="text" placeholder="如: 今天有什么大新闻 / DeepSeek 最新消息" onkeyup="if(event.key==='Enter') webSearch()" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500" />
-              <button onclick="webSearch()" class="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition shadow-md shadow-indigo-600/20">
+              <input id="webQueryInput" type="text" placeholder="如: 今天有什么大新闻 / DeepSeek 最新消息" onkeyup="if(event.key==='Enter') webSearch()" class="rp-input" />
+              <button onclick="webSearch()" class="rp-btn rp-btn-dark rp-btn-block">
                 联网检索
               </button>
             </div>
 
-            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
-              <h4 class="text-xs font-bold text-slate-300 flex items-center space-x-1.5">
-                <i class="fa-solid fa-file-invoice text-cyan-400"></i>
+            <div class="rp-card p-4 space-y-3">
+              <h4 class="rp-eyebrow flex items-center space-x-1.5">
+                <i class="fa-solid fa-file-invoice"></i>
                 <span>读取网页 / 链接</span>
               </h4>
-              <input id="webUrlInput" type="text" placeholder="粘贴 http(s):// 链接..." onkeyup="if(event.key==='Enter') webFetch()" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500" />
-              <button onclick="webFetch()" class="w-full py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-medium text-xs transition shadow-md shadow-cyan-600/20">
+              <input id="webUrlInput" type="text" placeholder="粘贴 http(s):// 链接..." onkeyup="if(event.key==='Enter') webFetch()" class="rp-input" />
+              <button onclick="webFetch()" class="rp-btn rp-btn-outline rp-btn-block">
                 读取网页正文
               </button>
             </div>
 
             <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-3 text-[11px] text-slate-500 space-y-1">
-              <div class="flex items-center space-x-1.5 text-slate-400"><i class="fa-solid fa-circle-info text-[10px]"></i><span>对话中也可以直接问</span></div>
-              <p>在聊天里输入 <span class="text-cyan-300 font-mono">!search 关键词</span> 或带网址的语句，Agent 会自动联网并基于结果回答。</p>
+              <div class="flex items-center space-x-1.5 text-[var(--muted)]"><i class="fa-solid fa-circle-info text-[10px]"></i><span>对话中也可以直接问</span></div>
+              <p>在聊天里输入 <span class="text-[var(--clay-deep)] font-mono">!search 关键词</span> 或带网址的语句，Agent 会自动联网并基于结果回答。</p>
             </div>
           </div>
 
           <!-- 右列：结果展示 -->
           <div class="col-span-2 space-y-4">
             <div id="webResultList" class="space-y-2">
-              <p class="text-xs text-slate-500 text-center py-10">输入关键词开始联网检索，结果将在此展示并附来源链接。</p>
+              <p class="text-xs text-[var(--muted)] text-center py-10">输入关键词开始联网检索，结果将在此展示并附来源链接。</p>
             </div>
           </div>
         </div>
@@ -570,34 +659,34 @@
   </div>
 
   <!-- 登录 / 注册浮层 -->
-  <div id="authOverlay" class="fixed inset-0 z-[80] bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-6">
-    <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 space-y-5">
+  <div id="authOverlay" class="fixed inset-0 z-[80] bg-[var(--ink)]/90 flex items-center justify-center p-6">
+    <div class="w-full max-w-md bg-[var(--paper)] border border-[var(--hairline)] p-6 space-y-5">
       <div class="text-center space-y-1">
-        <div class="w-12 h-12 mx-auto rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-          <i class="fa-solid fa-atom text-white text-xl"></i>
+        <div class="w-12 h-12 mx-auto bg-[var(--ink)] flex items-center justify-center">
+          <i class="fa-solid fa-atom text-[var(--cream)] text-xl"></i>
         </div>
-        <h2 class="text-lg font-bold text-white">登录 MyAgent Unified</h2>
-        <p class="text-xs text-slate-400">记忆按用户物理隔离；仅管理员可查看全部画像</p>
+        <h2 class="text-lg font-serif-editorial font-bold text-[var(--ink)]">登录 MyAgent Unified</h2>
+        <p class="text-xs text-[var(--muted)]">记忆按用户物理隔离；仅管理员可查看全部画像</p>
       </div>
 
-      <div class="flex bg-slate-950 rounded-lg p-1 border border-slate-800 text-xs">
-        <button id="authTabLogin" onclick="setAuthMode('login')" class="flex-1 py-1.5 rounded-md bg-indigo-600 text-white font-medium">登录</button>
-        <button id="authTabRegister" onclick="setAuthMode('register')" class="flex-1 py-1.5 rounded-md text-slate-400 font-medium">注册</button>
+      <div class="flex bg-[var(--cream-deep)] p-1 border border-[var(--hairline)] text-xs">
+        <button id="authTabLogin" onclick="setAuthMode('login')" class="flex-1 py-1.5 rp-btn-dark font-medium border-0">登录</button>
+        <button id="authTabRegister" onclick="setAuthMode('register')" class="flex-1 py-1.5 text-[var(--muted)] font-medium border-0 bg-transparent hover:bg-[var(--cream)]">注册</button>
       </div>
 
       <form id="authForm" onsubmit="handleAuthSubmit(event)" class="space-y-3">
-        <input id="authUsername" type="text" placeholder="用户名（至少 3 位）" autocomplete="username" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500" />
-        <input id="authPassword" type="password" placeholder="密码（至少 6 位）" autocomplete="current-password" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500" />
-        <input id="authNickname" type="text" placeholder="昵称（可选）" class="hidden w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500" />
-        <p id="authError" class="hidden text-xs text-rose-400"></p>
-        <button type="submit" id="authSubmitBtn" class="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium">登录</button>
+        <input id="authUsername" type="text" placeholder="用户名（至少 3 位）" autocomplete="username" class="rp-input" />
+        <input id="authPassword" type="password" placeholder="密码（至少 6 位）" autocomplete="current-password" class="rp-input" />
+        <input id="authNickname" type="text" placeholder="昵称（可选）" class="hidden rp-input" />
+        <p id="authError" class="hidden text-xs text-[var(--danger)]"></p>
+        <button type="submit" id="authSubmitBtn" class="rp-btn rp-btn-dark rp-btn-block">登录</button>
       </form>
 
       <div class="space-y-2">
-        <p class="text-[11px] text-slate-500 text-center">测试账号一键填充</p>
+        <p class="text-[11px] text-[var(--muted)] text-center">测试账号一键填充</p>
         <div class="grid grid-cols-2 gap-2">
-          <button onclick="fillDemoAccount('admin','admin123')" class="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs hover:bg-amber-500/20">管理员 admin / admin123</button>
-          <button onclick="fillDemoAccount('alice','123456')" class="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 text-xs hover:bg-slate-700">普通用户 alice / 123456</button>
+          <button onclick="fillDemoAccount('admin','admin123')" class="rp-btn rp-btn-outline text-xs">管理员 admin / admin123</button>
+          <button onclick="fillDemoAccount('alice','123456')" class="rp-btn rp-btn-outline text-xs">普通用户 alice / 123456</button>
         </div>
       </div>
     </div>
@@ -629,13 +718,13 @@
       const nick = document.getElementById('authNickname');
       const submit = document.getElementById('authSubmitBtn');
       if (mode === 'register') {
-        loginBtn.className = 'flex-1 py-1.5 rounded-md text-slate-400 font-medium';
-        registerBtn.className = 'flex-1 py-1.5 rounded-md bg-indigo-600 text-white font-medium';
+        loginBtn.className = 'flex-1 py-1.5 text-[var(--muted)] font-medium border-0 bg-transparent hover:bg-[var(--cream)]';
+        registerBtn.className = 'flex-1 py-1.5 rp-btn-dark font-medium border-0';
         nick.classList.remove('hidden');
         submit.innerText = '注册并登录';
       } else {
-        loginBtn.className = 'flex-1 py-1.5 rounded-md bg-indigo-600 text-white font-medium';
-        registerBtn.className = 'flex-1 py-1.5 rounded-md text-slate-400 font-medium';
+        loginBtn.className = 'flex-1 py-1.5 rp-btn-dark font-medium border-0';
+        registerBtn.className = 'flex-1 py-1.5 text-[var(--muted)] font-medium border-0 bg-transparent hover:bg-[var(--cream)]';
         nick.classList.add('hidden');
         submit.innerText = '登录';
       }
@@ -722,14 +811,14 @@
       const badge = document.getElementById('authRoleBadge');
       if (user.role === 'admin') {
         badge.innerText = '管理员';
-        badge.className = 'px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30';
+        badge.className = 'px-1.5 py-0.5 bg-[var(--clay)] text-white border border-[var(--clay)] font-mono-label';
         document.getElementById('adminUserSwitcher').classList.remove('hidden');
         document.getElementById('adminUserSwitcher').classList.add('flex');
         document.getElementById('adminPortraitPanel').classList.remove('hidden');
         loadAdminUsers();
       } else {
         badge.innerText = '普通用户';
-        badge.className = 'px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/20';
+        badge.className = 'px-1.5 py-0.5 bg-white text-[var(--muted)] border border-[var(--hairline-strong)] font-mono-label';
         document.getElementById('adminUserSwitcher').classList.add('hidden');
         document.getElementById('adminUserSwitcher').classList.remove('flex');
         document.getElementById('adminPortraitPanel').classList.add('hidden');
@@ -786,12 +875,12 @@
         const select = document.getElementById('adminTargetSelect');
         select.innerHTML = users.map(u => `<option value="${escapeHtml(u.username)}" ${u.username === state.userId ? 'selected' : ''}>${escapeHtml(u.nickname || u.username)} (${u.role})</option>`).join('');
         document.getElementById('adminUserStatsGrid').innerHTML = users.map(u => `
-          <button onclick="inspectUser('${escapeHtml(u.username)}')" class="text-left bg-slate-950/70 border border-slate-800 hover:border-amber-500/40 rounded-lg p-3 space-y-1">
+          <button onclick="inspectUser('${escapeHtml(u.username)}')" class="text-left bg-white border border-[var(--hairline)] hover:border-[var(--ink)] p-3 space-y-1 transition">
             <div class="flex items-center justify-between text-xs">
-              <span class="text-white font-medium">${escapeHtml(u.nickname || u.username)}</span>
-              <span class="text-[10px] text-slate-400">${u.role}</span>
+              <span class="text-[var(--ink)] font-medium">${escapeHtml(u.nickname || u.username)}</span>
+              <span class="text-[10px] text-[var(--muted)]">${u.role}</span>
             </div>
-            <p class="text-[11px] text-slate-400">记忆 ${u.stats?.total_memories || 0} · 交互 ${u.stats?.total_interactions || 0}</p>
+            <p class="text-[11px] text-[var(--muted)]">记忆 ${u.stats?.total_memories || 0} · 交互 ${u.stats?.total_interactions || 0}</p>
           </button>
         `).join('');
       } catch (err) {
@@ -840,12 +929,10 @@
 
       // 更新按钮高亮
       document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('bg-indigo-600', 'text-white', 'shadow-md', 'shadow-indigo-600/20');
-        btn.classList.add('text-slate-400', 'hover:text-slate-200', 'hover:bg-slate-800/60');
+        btn.classList.remove('tab-btn-active');
       });
       const activeBtn = document.getElementById(`tabBtn-${tabId}`);
-      activeBtn.classList.add('bg-indigo-600', 'text-white', 'shadow-md', 'shadow-indigo-600/20');
-      activeBtn.classList.remove('text-slate-400', 'hover:text-slate-200', 'hover:bg-slate-800/60');
+      activeBtn.classList.add('tab-btn-active');
 
       if (tabId === 'kanban') loadDashboard();
       if (tabId === 'library') loadLibrary();
@@ -863,12 +950,12 @@
         const res = await fetch('/health');
         const data = await res.json();
         if (data.status === 'ok') {
-          document.getElementById('healthBadge').className = 'flex items-center space-x-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium';
+          document.getElementById('healthBadge').className = 'badge badge-ok';
           document.getElementById('healthText').innerText = '系统正常';
           document.getElementById('cogEngineName').innerText = data.cognitive_engine || 'PythonEngine';
         }
       } catch (err) {
-        document.getElementById('healthBadge').className = 'flex items-center space-x-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20 font-medium';
+        document.getElementById('healthBadge').className = 'badge badge-err';
         document.getElementById('healthText').innerText = '服务离线';
       }
     }
@@ -964,14 +1051,14 @@
       div.className = 'flex items-start justify-end space-x-3.5 max-w-3xl ml-auto';
       div.innerHTML = `
         <div class="space-y-1 text-right">
-          <div class="bg-indigo-600 text-white rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm shadow-md leading-relaxed">
+          <div class="bg-[var(--ink)] text-[var(--cream)] px-4 py-2.5 text-sm leading-relaxed">
             ${escapeHtml(text)}
           </div>
-          <div class="text-[11px] text-slate-500">
+          <div class="text-[11px] text-[var(--muted)]">
             <span>${state.userId}</span> • <span>刚刚</span>
           </div>
         </div>
-        <div class="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex-shrink-0 flex items-center justify-center text-slate-300 text-sm">
+        <div class="w-8 h-8 bg-[var(--cream-deep)] border border-[var(--hairline)] flex-shrink-0 flex items-center justify-center text-[var(--muted)] text-sm">
           <i class="fa-solid fa-user"></i>
         </div>
       `;
@@ -985,12 +1072,12 @@
       div.id = msgId;
       div.className = 'flex items-start space-x-3.5 max-w-3xl';
       div.innerHTML = `
-        <div class="w-8 h-8 rounded-lg bg-indigo-600 flex-shrink-0 flex items-center justify-center text-white text-sm shadow-md">
+        <div class="w-8 h-8 bg-[var(--ink)] flex-shrink-0 flex items-center justify-center text-[var(--cream)] text-sm">
           <i class="fa-solid fa-robot"></i>
         </div>
         <div class="space-y-3 flex-1">
-          <div class="agent-content bg-slate-900 border border-slate-800 rounded-2xl rounded-tl-sm px-4 py-3 text-slate-200 text-sm shadow-sm prose leading-relaxed">
-            <div class="flex items-center space-x-2 text-slate-400">
+          <div class="agent-content bg-white border border-[var(--hairline)] px-4 py-3 text-[var(--ink)] text-sm prose leading-relaxed">
+            <div class="flex items-center space-x-2 text-[var(--muted)]">
               <i class="fa-solid fa-circle-notch animate-spin text-xs"></i>
               <span>正在思考与处理...</span>
             </div>
@@ -1020,18 +1107,18 @@
           if (secEvent.type === 'reality_patch') {
             const patch = secEvent.data;
             const card = document.createElement('div');
-            card.className = 'bg-cyan-950/40 border border-cyan-500/30 rounded-xl p-3.5 text-xs space-y-2 text-cyan-200';
+            card.className = 'rp-card p-3.5 text-xs space-y-2 border-l-4 border-l-[var(--clay)]';
             card.innerHTML = `
               <div class="flex items-center justify-between font-semibold">
                 <span class="flex items-center space-x-1.5">
-                  <i class="fa-solid fa-shield-halved text-cyan-400"></i>
+                  <i class="fa-solid fa-shield-halved text-[var(--clay)]"></i>
                   <span>待确认现实补丁: ${patch.id}</span>
                 </span>
-                <span class="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono">${patch.operation} ${patch.target_type}</span>
+                <span class="px-2 py-0.5 bg-[var(--cream-deep)] text-[var(--muted)] border border-[var(--hairline)] font-mono">${patch.operation} ${patch.target_type}</span>
               </div>
-              <p class="text-slate-300">提议变更: <strong>${escapeHtml(patch.proposed_change)}</strong></p>
+              <p class="text-[var(--muted)]">提议变更: <strong class="text-[var(--ink)]">${escapeHtml(patch.proposed_change)}</strong></p>
               <div class="flex items-center justify-end space-x-2 pt-1">
-                <button onclick="confirmPatch('${patch.id}')" class="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-medium transition shadow">
+                <button onclick="confirmPatch('${patch.id}')" class="rp-btn rp-btn-dark rp-btn-sm">
                   <i class="fa-solid fa-check mr-1"></i> 确认并应用补丁
                 </button>
               </div>
@@ -1040,13 +1127,13 @@
           } else if (secEvent.type === 'sync_draft') {
             const draft = secEvent.data;
             const card = document.createElement('div');
-            card.className = 'bg-slate-900 border border-slate-800 rounded-xl p-3.5 text-xs space-y-2 text-slate-300';
+            card.className = 'rp-card p-3.5 text-xs space-y-2 text-[var(--muted)]';
             card.innerHTML = `
-              <div class="flex items-center justify-between font-semibold text-white">
-                <span><i class="fa-solid fa-list-check text-indigo-400 mr-1.5"></i> 同步草稿已生成 (${draft.session_id})</span>
-                <button onclick="confirmSync('${draft.session_id}')" class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white transition">一键确认同步</button>
+              <div class="flex items-center justify-between font-semibold text-[var(--ink)]">
+                <span><i class="fa-solid fa-list-check text-[var(--ink)] mr-1.5"></i> 同步草稿已生成 (${draft.session_id})</span>
+                <button onclick="confirmSync('${draft.session_id}')" class="rp-btn rp-btn-outline rp-btn-sm">一键确认同步</button>
               </div>
-              <p class="text-slate-400">${draft.draft.tasks.length} 项任务提议待确认</p>
+              <p>${draft.draft.tasks.length} 项任务提议待确认</p>
             `;
             extrasBox.appendChild(card);
           }
@@ -1056,22 +1143,22 @@
       // 2. 渲染权威引用 (Citations)
       if (data.citations && data.citations.length > 0) {
         const citeBox = document.createElement('div');
-        citeBox.className = 'bg-slate-900/90 border border-slate-800 rounded-xl p-3 text-xs space-y-1.5';
+        citeBox.className = 'bg-[var(--cream-deep)] border border-[var(--hairline)] p-3 text-xs space-y-1.5';
         citeBox.innerHTML = `
-          <div class="font-semibold text-slate-400 flex items-center space-x-1.5">
-            <i class="fa-solid fa-bookmark text-indigo-400"></i>
+          <div class="font-semibold text-[var(--muted)] flex items-center space-x-1.5">
+            <i class="fa-solid fa-bookmark text-[var(--ink)]"></i>
             <span>参考知识库来源 (${data.citations.length})</span>
           </div>
         `;
         data.citations.forEach(c => {
           const titleHtml = c.url
-            ? `<a href="${escapeHtml(c.url)}" target="_blank" rel="noopener" class="text-indigo-300 hover:text-cyan-300 hover:underline font-medium">[${escapeHtml(c.title)}]</a>`
-            : `<span class="text-indigo-300 font-medium">[${escapeHtml(c.title)}]</span>`;
+            ? `<a href="${escapeHtml(c.url)}" target="_blank" rel="noopener" class="text-[var(--clay-deep)] hover:underline font-medium">[${escapeHtml(c.title)}]</a>`
+            : `<span class="text-[var(--clay-deep)] font-medium">[${escapeHtml(c.title)}]</span>`;
           citeBox.innerHTML += `
-            <div class="pl-3 border-l-2 border-indigo-500/50 py-0.5">
+            <div class="pl-3 border-l-2 border-[var(--hairline-strong)] py-0.5">
               ${titleHtml}
-              <span class="text-slate-400 text-[11px] ml-1">(${escapeHtml(c.source)})</span>
-              <p class="text-slate-400 text-[11px] mt-0.5 line-clamp-2">${escapeHtml(c.snippet)}</p>
+              <span class="text-[var(--muted)] text-[11px] ml-1">(${escapeHtml(c.source)})</span>
+              <p class="text-[var(--muted)] text-[11px] mt-0.5 line-clamp-2">${escapeHtml(c.snippet)}</p>
             </div>
           `;
         });
@@ -1082,13 +1169,13 @@
       if (data.tips && data.tips.length > 0) {
         data.tips.forEach(tip => {
           const tipCard = document.createElement('div');
-          tipCard.className = 'bg-amber-950/30 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-200 flex items-start space-x-2.5';
+          tipCard.className = 'bg-white border border-[var(--hairline)] border-l-4 border-l-[var(--clay)] p-3 text-xs text-[var(--ink)] flex items-start space-x-2.5';
           tipCard.innerHTML = `
-            <i class="fa-regular fa-lightbulb text-amber-400 text-sm mt-0.5"></i>
+            <i class="fa-regular fa-lightbulb text-[var(--clay)] text-sm mt-0.5"></i>
             <div class="space-y-0.5 flex-1">
-              <div class="font-bold text-amber-300">${escapeHtml(tip.title)}</div>
-              <p class="text-slate-300">${escapeHtml(tip.message)}</p>
-              ${tip.alternative_angle ? `<p class="text-amber-400/80 italic text-[11px]">建议角度: ${escapeHtml(tip.alternative_angle)}</p>` : ''}
+              <div class="font-bold">${escapeHtml(tip.title)}</div>
+              <p class="text-[var(--muted)]">${escapeHtml(tip.message)}</p>
+              ${tip.alternative_angle ? `<p class="text-[var(--clay-deep)] italic text-[11px]">建议角度: ${escapeHtml(tip.alternative_angle)}</p>` : ''}
             </div>
           `;
           extrasBox.appendChild(tipCard);
@@ -1098,9 +1185,9 @@
       // 4. 渲染记忆萃取事件
       if (data.memory_events && data.memory_events.length > 0) {
         const memEventDiv = document.createElement('div');
-        memEventDiv.className = 'text-[11px] text-slate-500 flex items-center space-x-2';
+        memEventDiv.className = 'text-[11px] text-[var(--muted)] flex items-center space-x-2';
         memEventDiv.innerHTML = `
-          <i class="fa-solid fa-sparkles text-indigo-400"></i>
+          <i class="fa-solid fa-sparkles text-[var(--clay)]"></i>
           <span>萃取长期记忆: ${data.memory_events.map(m => `[${m.category}] ${escapeHtml(m.content)}`).join(', ')}</span>
         `;
         extrasBox.appendChild(memEventDiv);
@@ -1114,7 +1201,7 @@
       const el = document.getElementById(msgId);
       if (!el) return;
       const contentBox = el.querySelector('.agent-content');
-      contentBox.innerHTML = `<span class="text-rose-400"><i class="fa-solid fa-triangle-exclamation mr-1.5"></i> 处理失败: ${escapeHtml(errMsg)}</span>`;
+      contentBox.innerHTML = `<span class="text-[var(--danger)]"><i class="fa-solid fa-triangle-exclamation mr-1.5"></i> 处理失败: ${escapeHtml(errMsg)}</span>`;
     }
 
     // ================= 看板与补丁模块 (Kanban & Patches) =================
@@ -1147,20 +1234,20 @@
         const tasks = data.tasks || [];
         if (tasks.length === 0) {
           Object.values(lanes).forEach(lane => {
-            lane.innerHTML = '<p class="text-xs text-slate-600 text-center py-6">无任务</p>';
+            lane.innerHTML = '<p class="text-xs text-[var(--muted)] text-center py-6">无任务</p>';
           });
         } else {
           tasks.forEach(task => {
             const lane = lanes[task.status] || lanes.todo;
             const card = document.createElement('div');
-            card.className = 'bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-2 text-xs shadow-sm hover:border-slate-700 transition';
+            card.className = 'lane-card text-xs hover:border-[var(--hairline-strong)] transition';
             card.innerHTML = `
-              <div class="flex items-center justify-between text-slate-400 text-[11px]">
+              <div class="flex items-center justify-between text-[var(--muted)] text-[11px]">
                 <span class="font-mono">${task.id}</span>
                 <span>${task.owner || '未指派'}</span>
               </div>
-              <p class="text-slate-200 font-medium">${escapeHtml(task.title)}</p>
-              <div class="text-[10px] text-slate-500 pt-1 border-t border-slate-800/60 flex items-center justify-between">
+              <p class="text-[var(--ink)] font-medium">${escapeHtml(task.title)}</p>
+              <div class="text-[10px] text-[var(--muted)] pt-1 border-t border-[var(--hairline)] flex items-center justify-between">
                 <span>更新: ${task.updated_at ? task.updated_at.substring(5, 16) : ''}</span>
               </div>
             `;
@@ -1172,33 +1259,33 @@
         const patchTable = document.getElementById('patchTableBody');
         const patches = data.patches || [];
         if (patches.length === 0) {
-          patchTable.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-slate-500">暂无补丁数据</td></tr>';
+          patchTable.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-[var(--muted)]">暂无补丁数据</td></tr>';
         } else {
           patchTable.innerHTML = patches.map(p => {
-            let statusBadge = `<span class="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">Draft (草稿)</span>`;
+            let statusBadge = `<span class="badge badge-warn">Draft (草稿)</span>`;
             if (p.status === 'applied') {
-              statusBadge = `<span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Applied (已应用)</span>`;
+              statusBadge = `<span class="badge badge-ok">Applied (已应用)</span>`;
             } else if (p.status === 'rolled_back') {
-              statusBadge = `<span class="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">Rolled Back (已回滚)</span>`;
+              statusBadge = `<span class="badge badge-err">Rolled Back (已回滚)</span>`;
             }
 
             let actionBtn = '';
             if (p.status === 'draft') {
-              actionBtn = `<button onclick="confirmPatch('${p.id}')" class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium">确认应用</button>`;
+              actionBtn = `<button onclick="confirmPatch('${p.id}')" class="rp-btn rp-btn-dark rp-btn-sm">确认应用</button>`;
             } else if (p.status === 'applied') {
-              actionBtn = `<button onclick="rollbackPatch('${p.id}')" class="px-2.5 py-1 rounded bg-rose-600/80 hover:bg-rose-600 text-white font-medium">回滚补丁</button>`;
+              actionBtn = `<button onclick="rollbackPatch('${p.id}')" class="rp-btn rp-btn-danger rp-btn-sm">回滚补丁</button>`;
             } else {
-              actionBtn = `<span class="text-slate-600">已归档</span>`;
+              actionBtn = `<span class="text-[var(--muted)]">已归档</span>`;
             }
 
             return `
-              <tr class="hover:bg-slate-900/40 transition">
-                <td class="p-3 font-mono font-medium text-slate-200">${p.id}</td>
+              <tr class="hover:bg-[var(--cream-deep)] transition">
+                <td class="p-3 font-mono font-medium text-[var(--ink)]">${p.id}</td>
                 <td class="p-3">${p.target_type}</td>
-                <td class="p-3 font-semibold text-cyan-400">${p.operation}</td>
-                <td class="p-3 text-slate-200 max-w-xs truncate" title="${escapeHtml(p.proposed_change)}">${escapeHtml(p.proposed_change)}</td>
+                <td class="p-3 font-semibold text-[var(--clay-deep)]">${p.operation}</td>
+                <td class="p-3 text-[var(--ink)] max-w-xs truncate" title="${escapeHtml(p.proposed_change)}">${escapeHtml(p.proposed_change)}</td>
                 <td class="p-3">${statusBadge}</td>
-                <td class="p-3 text-slate-400">${p.created_by}<br /><span class="text-[10px] text-slate-500">${p.created_at ? p.created_at.substring(5, 16) : ''}</span></td>
+                <td class="p-3 text-[var(--muted)]">${p.created_by}<br /><span class="text-[10px] text-[var(--faint)]">${p.created_at ? p.created_at.substring(5, 16) : ''}</span></td>
                 <td class="p-3 text-right">${actionBtn}</td>
               </tr>
             `;
@@ -1277,21 +1364,21 @@
 
         const listEl = document.getElementById('documentList');
         if (docs.length === 0) {
-          listEl.innerHTML = '<p class="text-xs text-slate-500 text-center py-4">暂无文档记录</p>';
+          listEl.innerHTML = '<p class="text-xs text-[var(--muted)] text-center py-4">暂无文档记录</p>';
           return;
         }
 
         listEl.innerHTML = docs.map(doc => `
-          <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-1 text-xs hover:border-slate-700 transition">
+          <div class="rp-card p-3 space-y-1 text-xs hover:border-[var(--hairline-strong)] transition">
             <div class="flex items-center justify-between">
-              <span class="font-bold text-slate-200 flex items-center space-x-1.5">
-                <i class="fa-regular fa-file-lines text-indigo-400"></i>
+              <span class="font-bold text-[var(--ink)] flex items-center space-x-1.5">
+                <i class="fa-regular fa-file-lines text-[var(--clay)]"></i>
                 <span>${escapeHtml(doc.title)}</span>
               </span>
-              <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px]">${doc.source || 'upload'}</span>
+              <span class="px-2 py-0.5 bg-[var(--cream-deep)] text-[var(--muted)] border border-[var(--hairline)] text-[10px] font-mono-label">${doc.source || 'upload'}</span>
             </div>
-            <p class="text-slate-400 text-[11px] line-clamp-2">${escapeHtml(doc.content || '')}</p>
-            <div class="flex items-center justify-between text-[10px] text-slate-500 pt-1 font-mono">
+            <p class="text-[var(--muted)] text-[11px] line-clamp-2">${escapeHtml(doc.content || '')}</p>
+            <div class="flex items-center justify-between text-[10px] text-[var(--faint)] pt-1 font-mono">
               <span>SHA256: ${doc.content_hash ? doc.content_hash.substring(0, 16) + '...' : ''}</span>
               <span>字数: ${doc.char_count || 0}</span>
             </div>
@@ -1366,19 +1453,19 @@
 
         const listEl = document.getElementById('documentList');
         if (results.length === 0) {
-          listEl.innerHTML = `<p class="text-xs text-amber-400/80 text-center py-4">未找到匹配「${escapeHtml(query)}」的知识库片段</p>`;
+          listEl.innerHTML = `<p class="text-xs text-[var(--clay-deep)]/80 text-center py-4">未找到匹配「${escapeHtml(query)}」的知识库片段</p>`;
           return;
         }
 
         listEl.innerHTML = `
-          <div class="text-xs text-indigo-400 font-semibold mb-2">命中检索结果 (${results.length} 条):</div>
+          <div class="text-xs text-[var(--ink)] font-semibold mb-2">命中检索结果 (${results.length} 条):</div>
           ${results.map(r => `
-            <div class="bg-slate-950 border border-indigo-500/30 rounded-xl p-3 space-y-1 text-xs">
+            <div class="rp-card border-l-4 border-l-[var(--clay)] p-3 space-y-1 text-xs">
               <div class="flex items-center justify-between">
-                <span class="font-bold text-indigo-300">[${escapeHtml(r.title)}]</span>
-                <span class="text-[10px] text-slate-500">匹配得分: ${r.score || 0}</span>
+                <span class="font-bold text-[var(--ink)]">[${escapeHtml(r.title)}]</span>
+                <span class="text-[10px] text-[var(--muted)]">匹配得分: ${r.score || 0}</span>
               </div>
-              <p class="text-slate-300 text-[11px]">${escapeHtml(r.snippet)}</p>
+              <p class="text-[var(--muted)] text-[11px]">${escapeHtml(r.snippet)}</p>
             </div>
           `).join('')}
         `;
@@ -1416,37 +1503,37 @@
         document.getElementById('webEngineBadge').innerText = `通道: ${data.channel || 'none'}`;
         const results = data.results || [];
         if (data.error && results.length === 0) {
-          listEl.innerHTML = `<p class="text-xs text-rose-400 text-center py-8"><i class="fa-solid fa-triangle-exclamation mr-1.5"></i>检索失败: ${escapeHtml(data.error)}</p>`;
+          listEl.innerHTML = `<p class="text-xs text-[var(--danger)] text-center py-8"><i class="fa-solid fa-triangle-exclamation mr-1.5"></i>检索失败: ${escapeHtml(data.error)}</p>`;
           return;
         }
         if (results.length === 0) {
-          listEl.innerHTML = `<p class="text-xs text-amber-400 text-center py-8">未找到关于「${escapeHtml(query)}」的结果，换个说法试试？</p>`;
+          listEl.innerHTML = `<p class="text-xs text-[var(--clay-deep)] text-center py-8">未找到关于「${escapeHtml(query)}」的结果，换个说法试试？</p>`;
           return;
         }
         listEl.innerHTML = `
-          ${data.answer ? `<div class="bg-indigo-950/40 border border-indigo-500/30 rounded-xl p-3.5 text-xs text-indigo-100 space-y-1">
-            <div class="font-bold text-indigo-300"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i>AI 综合摘要</div>
-            <p class="text-slate-300 leading-relaxed">${escapeHtml(data.answer)}</p>
+          ${data.answer ? `<div class="rp-card border-l-4 border-l-[var(--clay)] p-3.5 text-xs space-y-1">
+            <div class="font-bold text-[var(--ink)]"><i class="fa-solid fa-wand-magic-sparkles mr-1 text-[var(--clay)]"></i>AI 综合摘要</div>
+            <p class="text-[var(--muted)] leading-relaxed">${escapeHtml(data.answer)}</p>
           </div>` : ''}
           ${results.map((r, i) => `
-            <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 space-y-1.5 text-xs hover:border-slate-700 transition">
+            <div class="rp-card p-3.5 space-y-1.5 text-xs hover:border-[var(--hairline-strong)] transition">
               <div class="flex items-center justify-between">
-                <span class="font-bold text-slate-100 flex items-center space-x-1.5">
-                  <i class="fa-solid fa-globe text-[10px] text-cyan-400"></i>
-                  <a href="${escapeHtml(r.url)}" target="_blank" rel="noopener" class="hover:text-cyan-300 hover:underline truncate">${escapeHtml(r.title) || escapeHtml(r.url)}</a>
+                <span class="font-bold text-[var(--ink)] flex items-center space-x-1.5">
+                  <i class="fa-solid fa-globe text-[10px] text-[var(--clay)]"></i>
+                  <a href="${escapeHtml(r.url)}" target="_blank" rel="noopener" class="hover:text-[var(--clay-deep)] hover:underline truncate">${escapeHtml(r.title) || escapeHtml(r.url)}</a>
                 </span>
-                <span class="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px] flex-shrink-0">${i + 1}. ${escapeHtml(r.source || 'web')}</span>
+                <span class="px-2 py-0.5 bg-[var(--cream-deep)] text-[var(--muted)] border border-[var(--hairline)] text-[10px] flex-shrink-0 font-mono-label">${i + 1}. ${escapeHtml(r.source || 'web')}</span>
               </div>
-              <p class="text-slate-400 text-[11px] leading-relaxed">${escapeHtml(r.snippet || r.content || '')}</p>
-              <div class="flex items-center justify-between text-[10px] text-slate-500 font-mono">
+              <p class="text-[var(--muted)] text-[11px] leading-relaxed">${escapeHtml(r.snippet || r.content || '')}</p>
+              <div class="flex items-center justify-between text-[10px] text-[var(--faint)] font-mono">
                 <span class="truncate">${escapeHtml(r.url)}</span>
-                <button onclick="webFetchUrl('${escapeHtml(r.url)}')" class="ml-2 px-2 py-0.5 rounded bg-slate-800 hover:bg-cyan-500/20 hover:text-cyan-300 text-slate-400 transition flex-shrink-0">读正文</button>
+                <button onclick="webFetchUrl('${escapeHtml(r.url)}')" class="ml-2 rp-btn rp-btn-outline rp-btn-sm flex-shrink-0">读正文</button>
               </div>
             </div>
           `).join('')}
         `;
       } catch (err) {
-        listEl.innerHTML = `<p class="text-xs text-rose-400 text-center py-8">联网请求异常: ${escapeHtml(err.message)}</p>`;
+        listEl.innerHTML = `<p class="text-xs text-[var(--danger)] text-center py-8">联网请求异常: ${escapeHtml(err.message)}</p>`;
       }
     }
 
@@ -1458,7 +1545,7 @@
     async function webFetchUrl(url) {
       if (!url) { alert('请输入网页链接'); return; }
       const listEl = document.getElementById('webResultList');
-      listEl.innerHTML = `<p class="text-xs text-slate-400 text-center py-8"><i class="fa-solid fa-circle-notch animate-spin"></i> 正在读取 ${escapeHtml(url)} ...</p>`;
+      listEl.innerHTML = `<p class="text-xs text-[var(--muted)] text-center py-8"><i class="fa-solid fa-circle-notch animate-spin"></i> 正在读取 ${escapeHtml(url)} ...</p>`;
       try {
         const resp = await fetch('/v1/web/fetch', {
           method: 'POST',
@@ -1468,21 +1555,21 @@
         const data = await resp.json();
         const content = data.content || '';
         if (data.error && !content) {
-          listEl.innerHTML = `<p class="text-xs text-rose-400 text-center py-8">读取失败: ${escapeHtml(data.error || 'unknown')}</p>`;
+          listEl.innerHTML = `<p class="text-xs text-[var(--danger)] text-center py-8">读取失败: ${escapeHtml(data.error || 'unknown')}</p>`;
           return;
         }
         document.getElementById('webEngineBadge').innerText = `via: ${data.via || 'jina-direct'}`;
         listEl.innerHTML = `
-          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-2 text-xs">
+          <div class="rp-card p-4 space-y-2 text-xs">
             <div class="flex items-center justify-between">
-              <a href="${escapeHtml(url)}" target="_blank" rel="noopener" class="font-bold text-cyan-300 hover:underline truncate">${escapeHtml(url)}</a>
-              <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px] flex-shrink-0">正文 ${content.length} 字</span>
+              <a href="${escapeHtml(url)}" target="_blank" rel="noopener" class="font-bold text-[var(--clay-deep)] hover:underline truncate">${escapeHtml(url)}</a>
+              <span class="px-2 py-0.5 bg-[var(--cream-deep)] text-[var(--muted)] border border-[var(--hairline)] text-[10px] flex-shrink-0 font-mono-label">正文 ${content.length} 字</span>
             </div>
-            <pre class="whitespace-pre-wrap text-slate-300 leading-relaxed text-[11px] max-h-[520px] overflow-y-auto custom-scrollbar">${escapeHtml(content)}</pre>
+            <pre class="whitespace-pre-wrap text-[var(--ink)] leading-relaxed text-[11px] max-h-[520px] overflow-y-auto custom-scrollbar">${escapeHtml(content)}</pre>
           </div>
         `;
       } catch (err) {
-        listEl.innerHTML = `<p class="text-xs text-rose-400 text-center py-8">读取异常: ${escapeHtml(err.message)}</p>`;
+        listEl.innerHTML = `<p class="text-xs text-[var(--danger)] text-center py-8">读取异常: ${escapeHtml(err.message)}</p>`;
       }
     }
 
@@ -1506,14 +1593,14 @@
         grid.innerHTML = (data.traits || []).map(trait => {
           const pct = Math.round((trait.score || 0) * 100);
           return `
-            <div class="bg-slate-950 border border-slate-800 rounded-lg p-2.5 space-y-1.5">
-              <div class="text-[11px] text-slate-300 font-semibold">${escapeHtml(trait.zh)}</div>
-              <div class="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                <div class="h-full bg-cyan-400" style="width:${pct}%"></div>
+            <div class="bg-white border border-[var(--hairline)] p-2.5 space-y-1.5">
+              <div class="text-[11px] text-[var(--ink)] font-semibold">${escapeHtml(trait.zh)}</div>
+              <div class="rp-bar">
+                <div style="width:${pct}%"></div>
               </div>
-              <div class="flex items-center justify-between text-[10px] text-slate-500">
+              <div class="flex items-center justify-between text-[10px] text-[var(--muted)]">
                 <span>${escapeHtml(trait.en)}</span>
-                <span class="font-mono text-slate-300">${pct}%</span>
+                <span class="font-mono text-[var(--ink)]">${pct}%</span>
               </div>
             </div>`;
         }).join('');
