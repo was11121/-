@@ -25,8 +25,8 @@ class TestWebAndLLM(unittest.TestCase):
     def test_frontend_index_route(self):
         resp = self.app.get("/")
         self.assertEqual(resp.status_code, 200)
-        self.assertIn(b"MyAgent Unified", resp.data)
-        self.assertIn(b"RealityPatch Core", resp.data)
+        self.assertIn(b"MyAgent", resp.data)
+        self.assertIn("有什么想处理的？".encode("utf-8"), resp.data)
 
     def test_library_document_list_route(self):
         # 录入一篇文档
