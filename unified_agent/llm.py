@@ -21,7 +21,6 @@ def create_llm_responder(
     base_url: str | None = None,
     model: str | None = None,
     timeout: float = 30.0,
-    thinking_effort: str | None = None,
     fallback_responder: Callable[[str, str, str, str], str] | None = None,
 ) -> Callable[[str, str, str, str], str]:
     """创建统一的 LLM Responder 函数，兼容 OpenAI Chat Completions 规范。"""
