@@ -52,16 +52,21 @@ def get_engine(data_dir: str | Path | None = None) -> Engine:
             kwargs["poolclass"] = StaticPool
             kwargs["connect_args"] = {"check_same_thread": False}
         else:
+            # 文件型 SQLite：NullPool 用完即关，避免连接池句柄常驻锁住 .db
+            # 文件（否则 Windows 上无法删除/备份 users.db；本地单进程无性能损失）
+            from sqlalchemy.pool import NullPool
+
+            kwargs["poolclass"] = NullPool
             kwargs["connect_args"] = {"check_same_thread": False}
 
     engine = create_engine(url, future=True, pool_pre_ping=True, **kwargs)
 
     if url.startswith("sqlite"):
-        # 开启 WAL 提升并发读写；生产可用 PostgreSQL 替代以获取更强并发。
+        # 默认 rollback journal 模式：连接关闭即释放文件句柄，
+        # 方便删除/备份 users.db。（WAL 的 -wal/-shm 在 Windows 上会残留锁文件）
         @event.listens_for(engine, "connect")
         def _set_pragma(dbapi_connection, connection_record):  # noqa: ANN001
             cursor = dbapi_connection.cursor()
-            cursor.execute("PRAGMA journal_mode=WAL")
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.close()
 
