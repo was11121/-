@@ -220,7 +220,18 @@ curl -X POST http://127.0.0.1:8091/v1/interactions \
 
 ---
 
-### 3.6 彻底遗忘记忆 `/v1/users/{user_id}/memory/{memory_id}/forget`
+### 3.6 大五人格秘书督促档案 `/v1/users/{user_id}/personality`
+- **Method**: `GET`
+- **URL**: `/v1/users/<user_id>/personality`
+- **权限**: Authenticated；普通用户只能查看自身档案，管理员可查看任意用户
+- **作用**: 返回大五人格估计、理性/感性与执行/拖延倾向，以及秘书督促策略。人格用于督促工作学习，不会改变 Agent 口吻。
+- **模型**: 优先 `Minej/bert-base-personality`（BERT 文本分类，五大连续分）。未安装 torch/transformers 或中文文本时，与本地启发式混合。
+- **五大维度**: Openness 开放性、Conscientiousness 尽责性、Extraversion 外向性、Agreeableness 宜人性、Neuroticism 神经质
+- **响应关键字段**: `scores`、`work_style.thinking_label`、`work_style.execution_label`、`playbook.strengths`、`playbook.gaps`、`playbook.today_focus`
+
+---
+
+### 3.6.1 彻底遗忘记忆 `/v1/users/{user_id}/memory/{memory_id}/forget`
 - **Method**: `POST`
 - **URL**: `/v1/users/<user_id>/memory/<memory_id>/forget`
 - **权限**: Authenticated；普通用户只能遗忘自身记忆，管理员可操作任意用户
@@ -548,6 +559,55 @@ curl -X POST http://127.0.0.1:8091/v1/interactions \
 - **权限**: Admin Only
 - **路径参数**: `target_user` 可为 `username` 或用户 `id`
 - **响应**: `{ "target_user", "user_info", "stats", "memories": [...] }`
+
+---
+
+### 3.18 联网搜索与网页读取接口（Web Runtime）
+
+对话中也可直接触发：`!search 关键词`、`/联网 关键词`、粘贴 `http(s)://` 链接，Agent 会自动联网并将结果注入回答与引用。
+
+#### 3.18.1 联网引擎信息 `GET /v1/web/info`
+- **权限**: Public
+- **响应示例**:
+```json
+{
+  "searxng_url": "http://localhost:8080/search",
+  "tavily_configured": true,
+  "relay_configured": true,
+  "relay_host": "47.79.237.188"
+}
+```
+
+#### 3.18.2 多通道联网搜索 `POST /v1/web/search`
+- **权限**: Public
+- **请求体**: `{ "query": "DeepSeek 最新消息", "limit": 5 }`
+- **通道优先级**: searxng → Tavily 直连 → SSH 中转自动故障转移
+- **响应示例**:
+```json
+{
+  "channel": "tavily",
+  "results": [
+    { "title": "...", "url": "https://...", "snippet": "...", "source": "tavily", "score": 0.9 }
+  ],
+  "answer": "AI 综合摘要（Tavily include_answer）",
+  "error": ""
+}
+```
+- 所有通道不可用时返回 `"channel": "none"` 与 `"error"` 说明，不抛异常
+
+#### 3.18.3 读取网页正文 `POST /v1/web/fetch`
+- **权限**: Public
+- **请求体**: `{ "url": "https://example.com/page" }`
+- **通道**: Jina Reader 直连优先，失败自动转 SSH 中转
+- **响应**:
+```json
+{
+  "content": "网页正文 Markdown（最多 6000 字符）",
+  "error": "",
+  "via": "jina-direct"
+}
+```
+- 无效 URL 返回 `{ "error": "not a valid http(s) url", "via": "none" }`
 
 ---
 

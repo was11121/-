@@ -21,11 +21,11 @@ def create_llm_responder(
     base_url: str | None = None,
     model: str | None = None,
     timeout: float = 30.0,
-    fallback_responder: Callable[[str, str, str], str] | None = None,
-) -> Callable[[str, str, str], str]:
+    fallback_responder: Callable[[str, str, str, str], str] | None = None,
+) -> Callable[[str, str, str, str], str]:
     """创建统一的 LLM Responder 函数，兼容 OpenAI Chat Completions 规范。"""
 
-    def responder(message: str, user_context: str, library_context: str) -> str:
+    def responder(message: str, user_context: str, library_context: str, web_context: str = "摘要为空") -> str:
         key = api_key or os.getenv("MODEL_API_KEY") or DEFAULT_API_KEY
         url = (base_url or os.getenv("BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
         m = model or os.getenv("CURRENT_MODEL") or DEFAULT_MODEL
@@ -38,6 +38,8 @@ def create_llm_responder(
             "2. 当提供【长期用户记忆】时，请自然结合用户的个人偏好、需求、习惯或身份进行个性化回应。",
             "3. 当提供【本地知识库参考】时，请以此为权威依据，严谨引用并回答，并在回答中说明依据来源。",
             "4. 如果用户提出了关于任务创建、项目进展同步等请求，请给予清晰正面的答复，并告知后台已生成待确认现实补丁或同步草稿。",
+            "5. 若提供【秘书督促档案】：不要用某种人格口吻说话，不要扮演用户。根据短板督促、根据长处加码，给出今天可执行的下一步。",
+            "6. 当提供【联网检索结果】时，说明这是实时检索到的信息，回答用户关于时事、搜索、网页内容、行情等问题时要基于这些结果，并标注信息检索时间；若联网结果为空或无关，如实说明无法实时确认，不要编造来源。",
         ]
 
         if user_context:
@@ -45,6 +47,9 @@ def create_llm_responder(
 
         if library_context:
             system_parts.append(f"\n【本地知识库参考】\n{library_context}")
+
+        if web_context and web_context != "摘要为空":
+            system_parts.append(f"\n【联网检索结果】\n{web_context}")
 
         system_prompt = "\n".join(system_parts)
 
@@ -87,7 +92,7 @@ def create_llm_responder(
 
         # 优雅降级
         if fallback_responder:
-            return fallback_responder(message, user_context, library_context)
+            return fallback_responder(message, user_context, library_context, web_context or "")
 
         # 默认降级格式
         if library_context:

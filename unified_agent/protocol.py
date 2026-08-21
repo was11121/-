@@ -54,6 +54,7 @@ class Citation:
     source: str
     locator: str = ""
     snippet: str = ""
+    url: str = ""
 
 
 @dataclass(slots=True)

@@ -1,0 +1,16 @@
+# Minimal Docker context
+.git
+.gitignore
+.zcode
+.pytest_cache
+.test_tmp
+.dsh-rollback
+__pycache__
+**/__pycache__
+*.pyc
+.env
+data
+docs/node_modules
+node_modules
+*.sqlite3
+*.db
