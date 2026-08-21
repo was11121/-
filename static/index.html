@@ -640,8 +640,8 @@
               </button>
             </div>
 
-            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-3 text-[11px] text-slate-500 space-y-1">
-              <div class="flex items-center space-x-1.5 text-[var(--muted)]"><i class="fa-solid fa-circle-info text-[10px]"></i><span>对话中也可以直接问</span></div>
+            <div class="rp-panel p-3 text-[11px] text-[var(--muted)] space-y-1">
+              <div class="flex items-center space-x-1.5"><i class="fa-solid fa-circle-info text-[10px]"></i><span>对话中也可以直接问</span></div>
               <p>在聊天里输入 <span class="text-[var(--clay-deep)] font-mono">!search 关键词</span> 或带网址的语句，Agent 会自动联网并基于结果回答。</p>
             </div>
           </div>
@@ -1492,7 +1492,7 @@
       const query = document.getElementById('webQueryInput').value.trim();
       if (!query) { alert('请输入搜索关键词'); return; }
       const listEl = document.getElementById('webResultList');
-      listEl.innerHTML = `<p class="text-xs text-slate-400 text-center py-8"><i class="fa-solid fa-circle-notch animate-spin"></i> 正在联网检索「${escapeHtml(query)}」...</p>`;
+      listEl.innerHTML = `<p class="text-xs text-[var(--muted)] text-center py-8"><i class="fa-solid fa-circle-notch animate-spin"></i> 正在联网检索「${escapeHtml(query)}」...</p>`;
       try {
         const resp = await fetch('/v1/web/search', {
           method: 'POST',
@@ -1629,42 +1629,42 @@
           return;
         }
         if (resp.status === 403) {
-          document.getElementById('memoryCardGrid').innerHTML = `<div class="col-span-2 text-center py-12 text-rose-400 text-xs">${escapeHtml(data.error || '无权查看其他用户的记忆画像')}</div>`;
+          document.getElementById('memoryCardGrid').innerHTML = `<div class="col-span-2 text-center py-12 text-[var(--danger)] text-xs">${escapeHtml(data.error || '无权查看其他用户的记忆画像')}</div>`;
           return;
         }
         const memories = data.memories || [];
 
         const grid = document.getElementById('memoryCardGrid');
         if (memories.length === 0) {
-          grid.innerHTML = `<div class="col-span-2 text-center py-12 text-slate-500 text-xs">当前用户暂无${q ? '匹配' : ''}画像记忆</div>`;
+          grid.innerHTML = `<div class="col-span-2 text-center py-12 text-[var(--muted)] text-xs">当前用户暂无${q ? '匹配' : ''}画像记忆</div>`;
           return;
         }
 
         grid.innerHTML = memories.map(mem => `
-          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3 shadow-sm hover:border-slate-700 transition">
+          <div class="rp-card p-4 space-y-3 hover:border-[var(--hairline-strong)] transition">
             <div class="flex items-center justify-between">
-              <span class="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+              <span class="px-2.5 py-0.5 text-[11px] font-medium bg-[var(--cream-deep)] text-[var(--ink)] border border-[var(--hairline)] font-mono-label">
                 ${mem.category}
               </span>
-              <div class="flex items-center space-x-1 text-xs text-amber-400">
+              <div class="flex items-center space-x-1 text-xs text-[var(--clay-deep)]">
                 <i class="fa-solid fa-star text-[10px]"></i>
                 <span class="font-mono font-bold">${(mem.confidence * 100).toFixed(0)}%</span>
               </div>
             </div>
             <div>
-              <p class="text-sm font-semibold text-slate-100">${escapeHtml(mem.content)}</p>
-              <p class="text-xs text-slate-400 mt-1 italic">证据: "${escapeHtml(mem.evidence || '')}"</p>
+              <p class="text-sm font-semibold text-[var(--ink)]">${escapeHtml(mem.content)}</p>
+              <p class="text-xs text-[var(--muted)] mt-1 italic">证据: "${escapeHtml(mem.evidence || '')}"</p>
             </div>
-            <div class="flex items-center justify-between pt-2 border-t border-slate-800 text-xs">
-              <span class="text-slate-500 text-[10px]">出现次数: ${mem.occurrence_count} 次</span>
+            <div class="flex items-center justify-between pt-2 border-t border-[var(--hairline)] text-xs">
+              <span class="text-[var(--faint)] text-[10px]">出现次数: ${mem.occurrence_count} 次</span>
               <div class="flex items-center space-x-1.5">
-                <button onclick="applyFeedback('${mem.id}', 'confirm')" title="确认增强置信度" class="px-2 py-1 rounded bg-slate-800 hover:bg-emerald-600/80 hover:text-white text-slate-300 transition">
+                <button onclick="applyFeedback('${mem.id}', 'confirm')" title="确认增强置信度" class="rp-btn rp-btn-outline rp-btn-sm hover:border-[#3f7d4e] hover:text-[#3f7d4e]">
                   <i class="fa-solid fa-thumbs-up"></i>
                 </button>
-                <button onclick="applyFeedback('${mem.id}', 'reject')" title="拒绝标记为无效" class="px-2 py-1 rounded bg-slate-800 hover:bg-rose-600/80 hover:text-white text-slate-300 transition">
+                <button onclick="applyFeedback('${mem.id}', 'reject')" title="拒绝标记为无效" class="rp-btn rp-btn-outline rp-btn-sm hover:border-[var(--danger)] hover:text-[var(--danger)]">
                   <i class="fa-solid fa-thumbs-down"></i>
                 </button>
-                <button onclick="forgetMemory('${mem.id}')" title="彻底遗忘并抹除证据链" class="px-2 py-1 rounded bg-slate-800 hover:bg-red-700 hover:text-white text-slate-300 transition">
+                <button onclick="forgetMemory('${mem.id}')" title="彻底遗忘并抹除证据链" class="rp-btn rp-btn-danger rp-btn-sm">
                   <i class="fa-solid fa-trash-can"></i>
                 </button>
               </div>
