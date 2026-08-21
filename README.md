@@ -22,6 +22,7 @@ python app.py
 
 - `unified_agent/`：协议、统一 Agent Core 和响应提供器
 - `auth_runtime/`：登录注册、Bearer Token、角色权限（admin / user）
+- `storage/`：集中式用户数据库（SQLAlchemy 模型与连接层）
 - `memory_runtime/`：用户分区、反馈记忆、画像上下文
 - `personality_runtime/`：大五人格识别与秘书督促策略（补短板、扬长处）
 - `library_runtime/`：文档解析、净化、索引、检索和引用
@@ -30,10 +31,27 @@ python app.py
 - `tip_engine/`：换角度提示检测与冷却
 - `cognitive_engine/`：Python fallback 与可选 C++ 动态库适配器
 - `adapters/`：Web/QQ 渠道适配说明和兼容层
+- `tools/`：数据迁移等运维脚本
 - `docs/ARCHITECTURE.md`：统一架构蓝图
 - `docs/MyAgentUnified-项目完全解读.docx`：面向零基础读者的完整说明
 - `docs/MyAgentUnified-前端控制台接口文档.docx`：控制台操作与 HTTP 接口映射
 - `tests/`：核心闭环测试
+
+## 数据库架构（集中库）
+
+所有用户数据统一存放于**一个集中数据库**（不再是每人一个 SQLite 文件）：
+
+| 数据 | 表 | 存储位置 |
+|---|---|---|
+| 账号 / Token | users / tokens | `data/auth.sqlite3` |
+| 用户记忆 / 交互 / 反馈 | memories / interactions / feedback | `data/users.db`（集中库） |
+| 大五人格画像 / 观察 | personalities / personality_observations | `data/users.db`（集中库） |
+| 秘书看板 / 补丁 / 审计 | Workspace / Task / RealityPatch … | `data/secretary.sqlite3` |
+| 知识库索引 | — | `data/library/` |
+
+- 默认使用 SQLite：`DATABASE_URL` 留空时自动落到 `<MYAGENT_DATA_DIR>/users.db`（单文件备份即全量备份）。
+- **生产部署（Linux / Docker）**：设置 `DATABASE_URL=postgresql+psycopg2://user:pass@host:5432/myagent` 即切换到 PostgreSQL，所有表结构自动建表，业务代码无需改动。
+- 旧版散文件数据可用 `python tools/migrate_to_central_db.py` 一次性迁入集中库（幂等，可 `--dry-run` 预览）。
 
 ## 环境变量与模型配置
 
@@ -77,3 +95,24 @@ python app.py
 - 今天该督促什么、该发挥什么长处
 
 这不是让 Agent 用某种人格说话，也不是心理诊断。优先使用 Hugging Face 上的 `Minej/bert-base-personality`；未安装 `torch`/`transformers` 时自动用中文启发式。可在 `.env` 设置 `PERSONALITY_DISABLE_BERT=1` 强制跳过模型下载。
+
+## Linux / Docker 部署（生产）
+
+项目自带 `Dockerfile` 与 `docker-compose.yml`，面向 Linux 服务器一键部署：
+
+```bash
+# 1. 上传项目（排除 .env 内的密钥，可只传代码 + 新建 .env）
+# 2. 复制配置模板并填写密钥
+cp .env.example .env
+# 3. 构建并启动（app + PostgreSQL 集中库；searxng 需要时用 --profile search）
+docker compose up -d --build
+# 4. 大量使用联网搜索时再启动 searxng 通道
+docker compose --profile search up -d
+```
+
+- **数据库**：compose 自动拉起 PostgreSQL 16，应用通过 `DATABASE_URL` 连接，全用户数据落在一个 PG 库中；数据卷 `pg_data` 持久化，`docker volume` 即可备份/迁移。
+- **镜像说明**：默认安装精简依赖（不含 torch），人格走启发式，镜像约 300MB；需要 BERT 人格时构建加参数：`docker compose build --build-arg WITH_AI=1 app`。
+- **健康检查**：`/health` 每 30s 探测，异常自动重启（restart: unless-stopped）。
+- **迁移旧数据**：容器内执行 `docker compose exec app python tools/migrate_to_central_db.py` 可把旧 per-user 文件迁入集中库（本地在 `data/` 卷内）。
+- **升级**：`docker compose pull && docker compose up -d`。
+- 容器外直接用 Python 运行时（`python app.py`）不依赖 Docker，开发调试保持原样。

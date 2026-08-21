@@ -6,8 +6,11 @@ __pycache__/
 .pytest_cache/
 .zcode/
 .test_tmp/
+test_tmp_ws/
+smoke_dir/
 .dsh-rollback/
 *.sqlite3
+users.db
 docs/node_modules/
 docs/package-lock.json
 .DS_Store

@@ -16,6 +16,7 @@ except ImportError:
     pass
 
 from auth_runtime import AuthService
+from storage.db import get_database_url
 from unified_agent import InteractionEnvelope, UnifiedAgent
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
@@ -76,8 +77,9 @@ def health():
     return jsonify({
         "status": "ok",
         "service": "reality-patch-agent",
-        "memory": "local-isolated",
+        "memory": "central-users-db",
         "auth": "active",
+        "database": get_database_url(None).split(":")[0].split("+")[0],
         "cognitive_engine": type(agent.cognitive).__name__,
         "personality": agent.personality.encoder.info(),
     })
