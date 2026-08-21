@@ -220,7 +220,18 @@ curl -X POST http://127.0.0.1:8091/v1/interactions \
 
 ---
 
-### 3.6 彻底遗忘记忆 `/v1/users/{user_id}/memory/{memory_id}/forget`
+### 3.6 大五人格秘书督促档案 `/v1/users/{user_id}/personality`
+- **Method**: `GET`
+- **URL**: `/v1/users/<user_id>/personality`
+- **权限**: Authenticated；普通用户只能查看自身档案，管理员可查看任意用户
+- **作用**: 返回大五人格估计、理性/感性与执行/拖延倾向，以及秘书督促策略。人格用于督促工作学习，不会改变 Agent 口吻。
+- **模型**: 优先 `Minej/bert-base-personality`（BERT 文本分类，五大连续分）。未安装 torch/transformers 或中文文本时，与本地启发式混合。
+- **五大维度**: Openness 开放性、Conscientiousness 尽责性、Extraversion 外向性、Agreeableness 宜人性、Neuroticism 神经质
+- **响应关键字段**: `scores`、`work_style.thinking_label`、`work_style.execution_label`、`playbook.strengths`、`playbook.gaps`、`playbook.today_focus`
+
+---
+
+### 3.6.1 彻底遗忘记忆 `/v1/users/{user_id}/memory/{memory_id}/forget`
 - **Method**: `POST`
 - **URL**: `/v1/users/<user_id>/memory/<memory_id>/forget`
 - **权限**: Authenticated；普通用户只能遗忘自身记忆，管理员可操作任意用户
