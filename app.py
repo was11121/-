@@ -1,28 +1,20 @@
 """现实补丁 Agent 的 Web 和 QQ 统一入口，支持多租户认证与数据隔离。"""
-
 from __future__ import annotations
-
 import functools
 import json
 import os
 from pathlib import Path
-
 from flask import Flask, Response, g, jsonify, request
-
 try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
     pass
-
 from auth_runtime import AuthService
 from unified_agent import InteractionEnvelope, UnifiedAgent
-
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 agent = UnifiedAgent()
 auth_service = AuthService()
-
-
 def get_current_user() -> dict | None:
     """从请求头 Authorization: Bearer <token> 或 query 中解析当前登录用户。"""
     auth_header = request.headers.get("Authorization", "")
@@ -34,8 +26,6 @@ def get_current_user() -> dict | None:
     if not token:
         return None
     return auth_service.verify_token(token)
-
-
 def require_auth(f):
     """验证用户已登录。"""
     @functools.wraps(f)
@@ -46,8 +36,6 @@ def require_auth(f):
         g.current_user = user
         return f(*args, **kwargs)
     return wrapper
-
-
 def require_admin(f):
     """验证当前用户具有管理员权限。"""
     @functools.wraps(f)
@@ -60,17 +48,12 @@ def require_admin(f):
         g.current_user = user
         return f(*args, **kwargs)
     return wrapper
-
-
 # ----------------------------------------------------------------------
 # 静态资源与系统接口
 # ----------------------------------------------------------------------
-
 @app.get("/")
 def index():
-    return app.send_static_file("index.html")
-
-
+    return app.send_static_file("redesign/index.html")
 @app.get("/health")
 def health():
     return jsonify({
@@ -80,12 +63,9 @@ def health():
         "auth": "active",
         "cognitive_engine": type(agent.cognitive).__name__,
     })
-
-
 # ----------------------------------------------------------------------
 # 认证与用户接口 (Auth Routes)
 # ----------------------------------------------------------------------
-
 @app.post("/v1/auth/register")
 def auth_register():
     payload = request.get_json(silent=True) or {}
@@ -97,8 +77,6 @@ def auth_register():
         return jsonify({"success": True, "user": user})
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
-
-
 @app.post("/v1/auth/login")
 def auth_login():
     payload = request.get_json(silent=True) or {}
@@ -109,14 +87,10 @@ def auth_login():
         return jsonify(res)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
-
-
 @app.get("/v1/auth/me")
 @require_auth
 def auth_me():
     return jsonify({"user": g.current_user})
-
-
 @app.post("/v1/auth/logout")
 def auth_logout():
     auth_header = request.headers.get("Authorization", "")
@@ -126,12 +100,9 @@ def auth_logout():
     if token:
         auth_service.logout(token)
     return jsonify({"success": True})
-
-
 # ----------------------------------------------------------------------
 # 管理员专属接口 (Admin Routes - 个人画像穿透与统计)
 # ----------------------------------------------------------------------
-
 @app.get("/v1/admin/users")
 @require_admin
 def admin_list_users():
@@ -158,8 +129,6 @@ def admin_list_users():
             }
         })
     return jsonify({"users": enriched})
-
-
 @app.get("/v1/admin/users/<target_user>/profile")
 @require_admin
 def admin_user_profile(target_user: str):
@@ -179,12 +148,9 @@ def admin_user_profile(target_user: str):
         "stats": stats,
         "memories": memories,
     })
-
-
 # ----------------------------------------------------------------------
 # 智能交互与记忆操作 (支持用户身份严格绑定与普通用户隔离)
 # ----------------------------------------------------------------------
-
 @app.post("/v1/interactions")
 def interactions():
     payload = request.get_json(silent=True) or {}
@@ -201,8 +167,6 @@ def interactions():
     except Exception as exc:
         app.logger.exception("interaction failed")
         return jsonify({"error": str(exc)}), 500
-
-
 @app.post("/v1/interactions/stream")
 def interactions_stream():
     payload = request.get_json(silent=True) or {}
@@ -210,7 +174,6 @@ def interactions_stream():
     envelope = InteractionEnvelope.from_dict(payload)
     if user:
         envelope.user_id = user["username"]
-
     def generate():
         try:
             result = agent.handle_interaction(envelope)
@@ -218,10 +181,7 @@ def interactions_stream():
             yield "data: " + json.dumps({"type": "done"}, ensure_ascii=False) + "\n\n"
         except Exception as exc:
             yield "data: " + json.dumps({"type": "error", "data": str(exc)}, ensure_ascii=False) + "\n\n"
-
     return Response(generate(), mimetype="text/event-stream")
-
-
 @app.post("/v1/feedback")
 def feedback():
     payload = request.get_json(silent=True) or {}
@@ -231,8 +191,6 @@ def feedback():
         return jsonify(agent.apply_feedback(user_id, str(payload.get("feedback_type") or ""), payload.get("memory_id"), str(payload.get("content") or "")))
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
-
-
 @app.get("/v1/users/<user_id>/memory")
 def user_memory(user_id: str):
     """查询指定用户记忆。普通用户只能查询自己；管理员可查询任意用户。"""
@@ -242,8 +200,6 @@ def user_memory(user_id: str):
         if user["role"] != "admin" and user["username"] != user_id and user["id"] != user_id:
             return jsonify({"error": "无权查看其他用户的记忆画像", "code": "FORBIDDEN"}), 403
     return jsonify({"user_id": user_id, "memories": agent.search_user_memory(user_id, request.args.get("q", ""), int(request.args.get("limit", 20)))})
-
-
 @app.post("/v1/users/<user_id>/memory/<memory_id>/forget")
 def forget_memory(user_id: str, memory_id: str):
     user = get_current_user()
@@ -251,12 +207,9 @@ def forget_memory(user_id: str, memory_id: str):
         if user["role"] != "admin" and user["username"] != user_id and user["id"] != user_id:
             return jsonify({"error": "无权操作其他用户的记忆", "code": "FORBIDDEN"}), 403
     return jsonify({"success": agent.forget_memory(user_id, memory_id)})
-
-
 # ----------------------------------------------------------------------
 # 知识库与项目秘书相关接口
 # ----------------------------------------------------------------------
-
 @app.post("/v1/library/documents")
 def library_documents():
     upload = request.files.get("file")
@@ -271,19 +224,13 @@ def library_documents():
         return jsonify(agent.ingest_document(str(payload.get("filename") or "document.txt"), content, source=str(payload.get("source") or "api"), tags=payload.get("tags")))
     except (ValueError, RuntimeError, Exception) as exc:
         return jsonify({"error": str(exc)}), 400
-
-
 @app.get("/v1/library/documents")
 def library_list():
     records = agent.library._load_index()
     return jsonify({"documents": records})
-
-
 @app.get("/v1/library/search")
 def library_search():
     return jsonify({"results": agent.search_library(request.args.get("q", ""), int(request.args.get("limit", 10)))})
-
-
 @app.post("/v1/sync/<session_id>/confirm")
 def sync_confirm(session_id: str):
     payload = request.get_json(silent=True) or {}
@@ -293,8 +240,6 @@ def sync_confirm(session_id: str):
         return jsonify(agent.secretary.confirm_sync(session_id, actor))
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 409
-
-
 @app.post("/v1/workspaces/<workspace_id>/sync")
 def workspace_sync(workspace_id: str):
     payload = request.get_json(silent=True) or {}
@@ -302,13 +247,9 @@ def workspace_sync(workspace_id: str):
     actor = user["username"] if user else str(payload.get("actor") or "agent")
     draft = agent.secretary.draft_sync(workspace_id, str(payload.get("text") or ""), actor)
     return jsonify(draft)
-
-
 @app.get("/v1/workspaces/<workspace_id>/dashboard")
 def workspace_dashboard(workspace_id: str):
     return jsonify(agent.secretary.dashboard(workspace_id))
-
-
 @app.post("/v1/patches/<patch_id>/confirm")
 def patch_confirm(patch_id: str):
     payload = request.get_json(silent=True) or {}
@@ -318,8 +259,6 @@ def patch_confirm(patch_id: str):
         return jsonify(agent.confirm_patch(patch_id, actor))
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 409
-
-
 @app.post("/v1/patches/<patch_id>/rollback")
 def patch_rollback(patch_id: str):
     payload = request.get_json(silent=True) or {}
@@ -329,8 +268,6 @@ def patch_rollback(patch_id: str):
         return jsonify(agent.rollback_patch(patch_id, actor))
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 409
-
-
 @app.post("/qq")
 def qq_webhook():
     payload = request.get_json(silent=True) or {}
@@ -342,6 +279,9 @@ def qq_webhook():
     result = agent.handle_interaction(InteractionEnvelope(user_id=user_id, channel="qq", conversation_id=group_id, workspace_id=group_id, message=message))
     return jsonify({"status": "ok", "reply": result.to_dict()})
 
+@app.get("/redesign")
+def redesign_index():
+    return app.send_static_file("redesign/index.html")
 
 if __name__ == "__main__":
     app.run(host=os.getenv("HOST", "127.0.0.1"), port=int(os.getenv("PORT", "8091")), debug=False)
