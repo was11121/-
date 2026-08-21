@@ -106,6 +106,11 @@
           <i class="fa-solid fa-brain w-5 text-center"></i>
           <span>用户记忆与画像</span>
         </button>
+
+        <button onclick="switchTab('web')" id="tabBtn-web" class="tab-btn w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition duration-150 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60">
+          <i class="fa-solid fa-globe w-5 text-center"></i>
+          <span>联网搜索</span>
+        </button>
       </div>
 
       <!-- 底部系统与模型状态信息卡 -->
@@ -153,6 +158,7 @@
                 <ul class="mt-2 space-y-1">
                   <li><strong>用户个性化记忆</strong>：自动沉淀您的偏好、指令与身份，支持反馈与遗忘。</li>
                   <li><strong>权威知识库检索</strong>：支持多格式文件上传与引用溯源。</li>
+                  <li><strong>联网实时搜索</strong>：搜索关键词、读取网页，随时获取最新信息（试试 <span class="text-cyan-300 font-mono">!search 新闻</span>）。</li>
                   <li><strong>现实补丁与项目秘书</strong>：智能解析任务与会议进展，支持「草稿 &rarr; 确认 &rarr; 回滚」安全状态机。</li>
                   <li><strong>启发式 Tip 提示</strong>：主动捕捉潜在循环与决策风险。</li>
                 </ul>
@@ -176,6 +182,7 @@
               <button onclick="fillChatInput('创建一个任务：完成系统前后端联调测试')" class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 hover:text-white transition flex-shrink-0">📝 拟定任务补丁</button>
               <button onclick="fillChatInput('请根据知识库资料介绍一下相关背景')" class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 hover:text-white transition flex-shrink-0">📚 知识库检索</button>
               <button onclick="fillChatInput('同步任务：1. 修复文件上传400异常；2. 增加补丁实体状态机；3. 完善记忆检索过滤')" class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 hover:text-white transition flex-shrink-0">🔄 批量同步草稿</button>
+              <button onclick="fillChatInput('!search 今天有什么大新闻')" class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 hover:text-white transition flex-shrink-0">🌐 联网搜索</button>
             </div>
 
             <!-- 输入表单 -->
@@ -506,6 +513,59 @@
         </div>
       </section>
 
+      <!-- ================= TAB 5: 联网搜索 (Web) ================= -->
+      <section id="tab-web" class="tab-pane hidden flex-1 flex flex-col h-full p-6 overflow-y-auto custom-scrollbar space-y-6">
+        <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+          <div>
+            <h2 class="text-xl font-bold text-white flex items-center space-x-2">
+              <i class="fa-solid fa-globe text-indigo-400"></i>
+              <span>联网搜索 (Web Runtime)</span>
+            </h2>
+            <p class="text-xs text-slate-400 mt-1">多通道实时检索：searxng → Tavily → 新加坡中转自动故障转移，网页正文经 Jina Reader 读取。</p>
+          </div>
+          <span id="webEngineBadge" class="text-[10px] font-mono text-slate-500">未检索</span>
+        </div>
+
+        <div class="grid grid-cols-3 gap-6">
+          <!-- 左列：搜索 / 读网页录入 -->
+          <div class="space-y-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+              <h4 class="text-xs font-bold text-slate-300 flex items-center space-x-1.5">
+                <i class="fa-solid fa-magnifying-glass text-cyan-400"></i>
+                <span>关键词搜索</span>
+              </h4>
+              <input id="webQueryInput" type="text" placeholder="如: 今天有什么大新闻 / DeepSeek 最新消息" onkeyup="if(event.key==='Enter') webSearch()" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500" />
+              <button onclick="webSearch()" class="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition shadow-md shadow-indigo-600/20">
+                联网检索
+              </button>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+              <h4 class="text-xs font-bold text-slate-300 flex items-center space-x-1.5">
+                <i class="fa-solid fa-file-invoice text-cyan-400"></i>
+                <span>读取网页 / 链接</span>
+              </h4>
+              <input id="webUrlInput" type="text" placeholder="粘贴 http(s):// 链接..." onkeyup="if(event.key==='Enter') webFetch()" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500" />
+              <button onclick="webFetch()" class="w-full py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-medium text-xs transition shadow-md shadow-cyan-600/20">
+                读取网页正文
+              </button>
+            </div>
+
+            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-3 text-[11px] text-slate-500 space-y-1">
+              <div class="flex items-center space-x-1.5 text-slate-400"><i class="fa-solid fa-circle-info text-[10px]"></i><span>对话中也可以直接问</span></div>
+              <p>在聊天里输入 <span class="text-cyan-300 font-mono">!search 关键词</span> 或带网址的语句，Agent 会自动联网并基于结果回答。</p>
+            </div>
+          </div>
+
+          <!-- 右列：结果展示 -->
+          <div class="col-span-2 space-y-4">
+            <div id="webResultList" class="space-y-2">
+              <p class="text-xs text-slate-500 text-center py-10">输入关键词开始联网检索，结果将在此展示并附来源链接。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
     </main>
   </div>
 
@@ -789,6 +849,7 @@
 
       if (tabId === 'kanban') loadDashboard();
       if (tabId === 'library') loadLibrary();
+      if (tabId === 'web') { loadWebInfo(); }
       if (tabId === 'memory') {
         if (state.currentUser && state.currentUser.role === 'admin') loadAdminUsers();
         loadUserMemories();
@@ -1003,9 +1064,12 @@
           </div>
         `;
         data.citations.forEach(c => {
+          const titleHtml = c.url
+            ? `<a href="${escapeHtml(c.url)}" target="_blank" rel="noopener" class="text-indigo-300 hover:text-cyan-300 hover:underline font-medium">[${escapeHtml(c.title)}]</a>`
+            : `<span class="text-indigo-300 font-medium">[${escapeHtml(c.title)}]</span>`;
           citeBox.innerHTML += `
             <div class="pl-3 border-l-2 border-indigo-500/50 py-0.5">
-              <span class="text-indigo-300 font-medium">[${escapeHtml(c.title)}]</span>
+              ${titleHtml}
               <span class="text-slate-400 text-[11px] ml-1">(${escapeHtml(c.source)})</span>
               <p class="text-slate-400 text-[11px] mt-0.5 line-clamp-2">${escapeHtml(c.snippet)}</p>
             </div>
@@ -1320,6 +1384,105 @@
         `;
       } catch (err) {
         console.error('Search library failed:', err);
+      }
+    }
+
+    // ================= 联网模块 (Web / Web Runtime) =================
+    async function loadWebInfo() {
+      try {
+        const resp = await fetch('/v1/web/info', { headers: authHeaders() });
+        if (!resp.ok) return;
+        const info = await resp.json();
+        const parts = [];
+        parts.push(info.searxng_url ? `searxng:${info.searxng_url}` : 'searxng:n/a');
+        parts.push(info.tavily_configured ? 'tavily:on' : 'tavily:off');
+        parts.push(info.relay_configured ? `relay:${info.relay_host}` : 'relay:off');
+        document.getElementById('webEngineBadge').innerText = parts.join(' · ');
+      } catch (err) { /* noop */ }
+    }
+
+    async function webSearch() {
+      const query = document.getElementById('webQueryInput').value.trim();
+      if (!query) { alert('请输入搜索关键词'); return; }
+      const listEl = document.getElementById('webResultList');
+      listEl.innerHTML = `<p class="text-xs text-slate-400 text-center py-8"><i class="fa-solid fa-circle-notch animate-spin"></i> 正在联网检索「${escapeHtml(query)}」...</p>`;
+      try {
+        const resp = await fetch('/v1/web/search', {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ query, limit: 8 })
+        });
+        const data = await resp.json();
+        document.getElementById('webEngineBadge').innerText = `通道: ${data.channel || 'none'}`;
+        const results = data.results || [];
+        if (data.error && results.length === 0) {
+          listEl.innerHTML = `<p class="text-xs text-rose-400 text-center py-8"><i class="fa-solid fa-triangle-exclamation mr-1.5"></i>检索失败: ${escapeHtml(data.error)}</p>`;
+          return;
+        }
+        if (results.length === 0) {
+          listEl.innerHTML = `<p class="text-xs text-amber-400 text-center py-8">未找到关于「${escapeHtml(query)}」的结果，换个说法试试？</p>`;
+          return;
+        }
+        listEl.innerHTML = `
+          ${data.answer ? `<div class="bg-indigo-950/40 border border-indigo-500/30 rounded-xl p-3.5 text-xs text-indigo-100 space-y-1">
+            <div class="font-bold text-indigo-300"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i>AI 综合摘要</div>
+            <p class="text-slate-300 leading-relaxed">${escapeHtml(data.answer)}</p>
+          </div>` : ''}
+          ${results.map((r, i) => `
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 space-y-1.5 text-xs hover:border-slate-700 transition">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-100 flex items-center space-x-1.5">
+                  <i class="fa-solid fa-globe text-[10px] text-cyan-400"></i>
+                  <a href="${escapeHtml(r.url)}" target="_blank" rel="noopener" class="hover:text-cyan-300 hover:underline truncate">${escapeHtml(r.title) || escapeHtml(r.url)}</a>
+                </span>
+                <span class="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px] flex-shrink-0">${i + 1}. ${escapeHtml(r.source || 'web')}</span>
+              </div>
+              <p class="text-slate-400 text-[11px] leading-relaxed">${escapeHtml(r.snippet || r.content || '')}</p>
+              <div class="flex items-center justify-between text-[10px] text-slate-500 font-mono">
+                <span class="truncate">${escapeHtml(r.url)}</span>
+                <button onclick="webFetchUrl('${escapeHtml(r.url)}')" class="ml-2 px-2 py-0.5 rounded bg-slate-800 hover:bg-cyan-500/20 hover:text-cyan-300 text-slate-400 transition flex-shrink-0">读正文</button>
+              </div>
+            </div>
+          `).join('')}
+        `;
+      } catch (err) {
+        listEl.innerHTML = `<p class="text-xs text-rose-400 text-center py-8">联网请求异常: ${escapeHtml(err.message)}</p>`;
+      }
+    }
+
+    async function webFetch() {
+      const url = document.getElementById('webUrlInput').value.trim();
+      await webFetchUrl(url);
+    }
+
+    async function webFetchUrl(url) {
+      if (!url) { alert('请输入网页链接'); return; }
+      const listEl = document.getElementById('webResultList');
+      listEl.innerHTML = `<p class="text-xs text-slate-400 text-center py-8"><i class="fa-solid fa-circle-notch animate-spin"></i> 正在读取 ${escapeHtml(url)} ...</p>`;
+      try {
+        const resp = await fetch('/v1/web/fetch', {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ url })
+        });
+        const data = await resp.json();
+        const content = data.content || '';
+        if (data.error && !content) {
+          listEl.innerHTML = `<p class="text-xs text-rose-400 text-center py-8">读取失败: ${escapeHtml(data.error || 'unknown')}</p>`;
+          return;
+        }
+        document.getElementById('webEngineBadge').innerText = `via: ${data.via || 'jina-direct'}`;
+        listEl.innerHTML = `
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-2 text-xs">
+            <div class="flex items-center justify-between">
+              <a href="${escapeHtml(url)}" target="_blank" rel="noopener" class="font-bold text-cyan-300 hover:underline truncate">${escapeHtml(url)}</a>
+              <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px] flex-shrink-0">正文 ${content.length} 字</span>
+            </div>
+            <pre class="whitespace-pre-wrap text-slate-300 leading-relaxed text-[11px] max-h-[520px] overflow-y-auto custom-scrollbar">${escapeHtml(content)}</pre>
+          </div>
+        `;
+      } catch (err) {
+        listEl.innerHTML = `<p class="text-xs text-rose-400 text-center py-8">读取异常: ${escapeHtml(err.message)}</p>`;
       }
     }
 

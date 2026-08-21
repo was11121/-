@@ -562,6 +562,55 @@ curl -X POST http://127.0.0.1:8091/v1/interactions \
 
 ---
 
+### 3.18 联网搜索与网页读取接口（Web Runtime）
+
+对话中也可直接触发：`!search 关键词`、`/联网 关键词`、粘贴 `http(s)://` 链接，Agent 会自动联网并将结果注入回答与引用。
+
+#### 3.18.1 联网引擎信息 `GET /v1/web/info`
+- **权限**: Public
+- **响应示例**:
+```json
+{
+  "searxng_url": "http://localhost:8080/search",
+  "tavily_configured": true,
+  "relay_configured": true,
+  "relay_host": "47.79.237.188"
+}
+```
+
+#### 3.18.2 多通道联网搜索 `POST /v1/web/search`
+- **权限**: Public
+- **请求体**: `{ "query": "DeepSeek 最新消息", "limit": 5 }`
+- **通道优先级**: searxng → Tavily 直连 → SSH 中转自动故障转移
+- **响应示例**:
+```json
+{
+  "channel": "tavily",
+  "results": [
+    { "title": "...", "url": "https://...", "snippet": "...", "source": "tavily", "score": 0.9 }
+  ],
+  "answer": "AI 综合摘要（Tavily include_answer）",
+  "error": ""
+}
+```
+- 所有通道不可用时返回 `"channel": "none"` 与 `"error"` 说明，不抛异常
+
+#### 3.18.3 读取网页正文 `POST /v1/web/fetch`
+- **权限**: Public
+- **请求体**: `{ "url": "https://example.com/page" }`
+- **通道**: Jina Reader 直连优先，失败自动转 SSH 中转
+- **响应**:
+```json
+{
+  "content": "网页正文 Markdown（最多 6000 字符）",
+  "error": "",
+  "via": "jina-direct"
+}
+```
+- 无效 URL 返回 `{ "error": "not a valid http(s) url", "via": "none" }`
+
+---
+
 ## 4. 错误码与异常处理规范
 
 | HTTP 状态码 | 含义 | 场景说明 |
