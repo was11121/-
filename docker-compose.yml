@@ -1,0 +1,78 @@
+# MyAgentUnified 生产编排：app + PostgreSQL（集中库）+ 可选 searxng
+#
+# 快速开始（服务器 Linux）：
+#   1. 复制 .env.example 为 .env 并填写真实密钥
+#   2. docker compose up -d --build
+#   3. 打开 http://<服务器IP>:8091
+#
+# 数据库：应用默认 DATABASE_URL 指向本编排的 PostgreSQL 实例（users.db 集中库，
+# 全用户记忆/画像/交互都在这一个库里）。本地开发不装 Docker 时留空 DATABASE_URL 即用 SQLite。
+
+services:
+  app:
+    build:
+      context: .
+      args:
+        # 需要 BERT 人格（torch，镜像大）时改为 "1"
+        WITH_AI: "0"
+    image: myagent-unified:latest
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8091}:8091"
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-myagent}:${POSTGRES_PASSWORD:-myagent_pass}@db:5432/${POSTGRES_DB:-myagent}
+      MYAGENT_DATA_DIR: /data
+      MODEL_API_KEY: ${MODEL_API_KEY:-}
+      BASE_URL: ${BASE_URL:-https://api.deepseek.com}
+      CURRENT_MODEL: ${CURRENT_MODEL:-deepseek-v4-flash}
+      COGNITIVE_ENGINE_LIBRARY: ${COGNITIVE_ENGINE_LIBRARY:-}
+      PERSONALITY_MODEL: ${PERSONALITY_MODEL:-Minej/bert-base-personality}
+      PERSONALITY_DISABLE_BERT: ${PERSONALITY_DISABLE_BERT:-1}
+      SEARXNG_URL: http://searxng:8080/search
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      WEB_RELAY_SSH_HOST: ${WEB_RELAY_SSH_HOST:-}
+      WEB_RELAY_SSH_USER: ${WEB_RELAY_SSH_USER:-}
+      WEB_RELAY_SSH_KEY: ${WEB_RELAY_SSH_KEY:-}
+      WEB_SEARCH_TIMEOUT: ${WEB_SEARCH_TIMEOUT:-20}
+    volumes:
+      # 非数据库数据（知识库文档、日志等）持久化
+      - app_data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8091/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-myagent}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-myagent_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-myagent}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-myagent} -d ${POSTGRES_DB:-myagent}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # 可选：本地 searxng 搜索引擎（联网搜索第一通道；不想要就注释掉本段）
+  searxng:
+    image: searxng/searxng:latest
+    restart: unless-stopped
+    profiles: ["search"]
+    environment:
+      SEARXNG_BASE_URL: http://searxng:8080/
+    volumes:
+      - searxng_data:/etc/searxng
+
+volumes:
+  app_data:
+  pg_data:
+  searxng_data:

@@ -1,20 +1,25 @@
-"""本地隔离的长期反馈记忆服务。
+"""本地隔离的长期反馈记忆服务（集中库版）。
 
-每个用户使用独立 SQLite 文件，避免用户记忆跨分区泄漏。提取规则保持保守，
-并把纠正、拒绝和忘记作为一等反馈事件。
+所有用户数据统一存放在集中库（默认 SQLite: <data>/users.db，
+生产可配置 DATABASE_URL 切换 PostgreSQL），每行带 user_id 分区列。
+对外接口与旧版完全一致，仅供上层（UnifiedAgent / API）无感调用。
+
+提取规则保持保守，并把纠正、拒绝和忘记作为一等反馈事件。
 """
 
 from __future__ import annotations
 
-import json
 import os
 import re
-import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import func, select, update
+
+from storage.db import get_session, init_db
+from storage.models import FeedbackRow, InteractionRow, MemoryRow
 
 FEEDBACK_TYPES = {"confirm", "correct", "reject", "forget", "prefer_style", "change_preference"}
 
@@ -31,52 +36,20 @@ def _safe_id(value: str | int | None) -> str:
 
 class MemoryService:
     def __init__(self, data_dir: str | Path | None = None):
-        root = Path(data_dir or os.getenv("MYAGENT_DATA_DIR", Path(__file__).resolve().parents[1] / "data"))
-        self.root = root / "users"
+        self._data_dir = Path(data_dir) if data_dir is not None else Path(
+            os.getenv("MYAGENT_DATA_DIR", Path(__file__).resolve().parents[1] / "data")
+        )
+        self.root = self._data_dir / "users"
         self.root.mkdir(parents=True, exist_ok=True)
+        init_db(self._data_dir)
 
+    # ---------- 兼容接口：旧路径（仅供外部引用，新数据不再写入） ----------
     def user_dir(self, user_id: str | int | None) -> Path:
         path = self.root / _safe_id(user_id)
         path.mkdir(parents=True, exist_ok=True)
         return path
 
-    def _connect(self, user_id: str | int | None) -> sqlite3.Connection:
-        db = self.user_dir(user_id) / "memory.sqlite3"
-        conn = sqlite3.connect(db)
-        conn.row_factory = sqlite3.Row
-        conn.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS memories (
-                id TEXT PRIMARY KEY,
-                category TEXT NOT NULL,
-                content TEXT NOT NULL,
-                confidence REAL NOT NULL,
-                source TEXT NOT NULL,
-                evidence TEXT NOT NULL,
-                occurrence_count INTEGER NOT NULL DEFAULT 1,
-                status TEXT NOT NULL DEFAULT 'active',
-                created_at TEXT NOT NULL,
-                last_seen_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS interactions (
-                id TEXT PRIMARY KEY,
-                message TEXT NOT NULL,
-                reply TEXT NOT NULL,
-                source TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS feedback (
-                id TEXT PRIMARY KEY,
-                memory_id TEXT,
-                feedback_type TEXT NOT NULL,
-                content TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            );
-            """
-        )
-        return conn
-
+    # ---------- 记忆提取 ----------
     def extract_memory_candidates(self, message: str, source: str = "chat") -> list[dict[str, Any]]:
         text = (message or "").strip()
         if not text:
@@ -102,42 +75,96 @@ class MemoryService:
             unique[(item["category"], item["content"])] = item
         return list(unique.values())
 
+    # ---------- 交互记录 ----------
     def record_interaction(self, user_id: str, message: str, reply: str, *, source: str = "chat") -> dict[str, Any]:
         uid = _safe_id(user_id)
-        conn = self._connect(uid)
-        try:
-            conn.execute("INSERT INTO interactions VALUES (?, ?, ?, ?, ?)", ("int_" + uuid.uuid4().hex[:12], message, reply, source, _now()))
+        with get_session(self._data_dir) as session:
+            session.add(InteractionRow(
+                id="int_" + uuid.uuid4().hex[:12],
+                user_id=uid,
+                message=message,
+                reply=reply,
+                source=source,
+                created_at=_now(),
+            ))
             candidates = self.extract_memory_candidates(message, source)
-            stored = [self._upsert(conn, uid, item) for item in candidates]
-            conn.commit()
+            stored = [self._upsert(session, uid, item) for item in candidates]
+            session.commit()
             return {"user_id": uid, "extracted": len(candidates), "stored": [item for item in stored if item]}
-        finally:
-            conn.close()
 
-    def _upsert(self, conn: sqlite3.Connection, user_id: str, item: dict[str, Any]) -> dict[str, Any] | None:
-        row = conn.execute(
-            "SELECT * FROM memories WHERE category=? AND content=? AND status='active'",
-            (item["category"], item["content"]),
-        ).fetchone()
+    def _upsert(self, session, user_id: str, item: dict[str, Any]) -> dict[str, Any] | None:  # noqa: ANN001
+        row = session.execute(
+            select(MemoryRow).where(
+                MemoryRow.user_id == user_id,
+                MemoryRow.category == item["category"],
+                MemoryRow.content == item["content"],
+                MemoryRow.status == "active",
+            )
+        ).scalar_one_or_none()
         now = _now()
         if row:
-            conn.execute("UPDATE memories SET occurrence_count=occurrence_count+1, confidence=MAX(confidence, ?), last_seen_at=?, updated_at=? WHERE id=?", (item["confidence"], now, now, row["id"]))
-            return dict(conn.execute("SELECT * FROM memories WHERE id=?", (row["id"],)).fetchone())
+            row.occurrence_count += 1
+            row.confidence = max(row.confidence, item["confidence"])
+            row.last_seen_at = now
+            row.updated_at = now
+            session.flush()
+            return {
+                "id": row.id,
+                "category": row.category,
+                "content": row.content,
+                "confidence": row.confidence,
+                "source": row.source,
+                "evidence": row.evidence,
+                "occurrence_count": row.occurrence_count,
+                "status": row.status,
+            }
         memory_id = "mem_" + uuid.uuid4().hex[:12]
-        conn.execute("INSERT INTO memories VALUES (?, ?, ?, ?, ?, ?, 1, 'active', ?, ?, ?)", (memory_id, item["category"], item["content"], item["confidence"], item["source"], item["evidence"], now, now, now))
-        return dict(conn.execute("SELECT * FROM memories WHERE id=?", (memory_id,)).fetchone())
+        memory_row = MemoryRow(
+            id=memory_id,
+            user_id=user_id,
+            category=item["category"],
+            content=item["content"],
+            confidence=item["confidence"],
+            source=item["source"],
+            evidence=item["evidence"],
+            occurrence_count=1,
+            status="active",
+            created_at=now,
+            last_seen_at=now,
+            updated_at=now,
+        )
+        session.add(memory_row)
+        session.flush()
+        return {
+            "id": memory_id,
+            "category": item["category"],
+            "content": item["content"],
+            "confidence": item["confidence"],
+            "source": item["source"],
+            "evidence": item["evidence"],
+            "occurrence_count": 1,
+            "status": "active",
+        }
 
+    # ---------- 检索 ----------
     def search_user_memory(self, user_id: str, query: str = "", limit: int = 8) -> list[dict[str, Any]]:
-        conn = self._connect(user_id)
-        try:
-            rows = [dict(row) for row in conn.execute("SELECT * FROM memories WHERE status='active' ORDER BY confidence DESC, last_seen_at DESC LIMIT 300")]
+        uid = _safe_id(user_id)
+        with get_session(self._data_dir) as session:
+            rows = [
+                row
+                for row in session.execute(
+                    select(MemoryRow).where(MemoryRow.user_id == uid, MemoryRow.status == "active")
+                    .order_by(MemoryRow.confidence.desc(), MemoryRow.last_seen_at.desc())
+                    .limit(300)
+                ).scalars()
+            ]
             raw_query = (query or "").strip().lower()
             tokens = {token.lower() for token in re.findall(r"[\w\u4e00-\u9fff]{2,}", raw_query)}
             if raw_query:
                 matched_rows = []
                 for row in rows:
-                    content_lower = str(row.get("content") or "").lower()
-                    evidence_lower = str(row.get("evidence") or "").lower()
+                    content_lower = str(row.content or "").lower()
+                    evidence_lower = str(row.evidence or "").lower()
                     hit_count = 0
                     if raw_query in content_lower:
                         hit_count += 3
@@ -150,51 +177,87 @@ class MemoryService:
                             hit_count += 1
                     if hit_count > 0:
                         matched_rows.append((hit_count, row))
-
                 matched_rows.sort(
                     key=lambda item: (
                         item[0],
-                        item[1]["confidence"],
-                        item[1]["occurrence_count"],
+                        item[1].confidence,
+                        item[1].occurrence_count,
                     ),
                     reverse=True,
                 )
-                return [item[1] for item in matched_rows][: max(1, min(limit, 50))]
-            return rows[: max(1, min(limit, 50))]
-        finally:
-            conn.close()
+                return [
+                    self._to_dict(item[1]) for item in matched_rows[: max(1, min(limit, 50))]
+                ]
+            return [self._to_dict(r) for r in rows[: max(1, min(limit, 50))]]
 
+    @staticmethod
+    def _to_dict(row: MemoryRow) -> dict[str, Any]:
+        return {
+            "id": row.id,
+            "category": row.category,
+            "content": row.content,
+            "confidence": row.confidence,
+            "source": row.source,
+            "evidence": row.evidence,
+            "occurrence_count": row.occurrence_count,
+            "status": row.status,
+            "created_at": row.created_at,
+            "last_seen_at": row.last_seen_at,
+            "updated_at": row.updated_at,
+        }
+
+    # ---------- 反馈与遗忘 ----------
     def apply_feedback(self, user_id: str, feedback_type: str, memory_id: str | None = None, content: str = "") -> dict[str, Any]:
         if feedback_type not in FEEDBACK_TYPES:
             raise ValueError(f"unsupported feedback type: {feedback_type}")
-        conn = self._connect(user_id)
-        try:
+        uid = _safe_id(user_id)
+        now = _now()
+        with get_session(self._data_dir) as session:
             feedback_id = "fb_" + uuid.uuid4().hex[:12]
-            conn.execute("INSERT INTO feedback VALUES (?, ?, ?, ?, ?)", (feedback_id, memory_id, feedback_type, content, _now()))
+            session.add(FeedbackRow(
+                id=feedback_id,
+                user_id=uid,
+                memory_id=memory_id,
+                feedback_type=feedback_type,
+                content=content,
+                created_at=now,
+            ))
             if memory_id and feedback_type in {"reject", "forget"}:
-                conn.execute("UPDATE memories SET status='rejected' WHERE id=?", (memory_id,))
+                session.execute(
+                    update(MemoryRow)
+                    .where(MemoryRow.id == memory_id, MemoryRow.user_id == uid)
+                    .values(status="rejected")
+                )
             if memory_id and feedback_type == "confirm":
-                conn.execute("UPDATE memories SET confidence=MIN(1.0, confidence + 0.08), updated_at=? WHERE id=?", (_now(), memory_id))
-            conn.commit()
+                row = session.execute(
+                    select(MemoryRow).where(MemoryRow.id == memory_id, MemoryRow.user_id == uid)
+                ).scalar_one_or_none()
+                if row:
+                    row.confidence = min(1.0, row.confidence + 0.08)
+                    row.updated_at = now
+            session.commit()
             return {"feedback_id": feedback_id, "memory_id": memory_id, "feedback_type": feedback_type}
-        finally:
-            conn.close()
 
     def forget_memory(self, user_id: str, memory_id: str) -> bool:
-        conn = self._connect(user_id)
-        try:
-            row = conn.execute("SELECT evidence FROM memories WHERE id=?", (memory_id,)).fetchone()
+        uid = _safe_id(user_id)
+        with get_session(self._data_dir) as session:
+            row = session.execute(
+                select(MemoryRow).where(MemoryRow.id == memory_id, MemoryRow.user_id == uid)
+            ).scalar_one_or_none()
             if not row:
                 return False
             # A single utterance can create multiple conservative candidates
             # (for example, both a preference and an instruction). Forgetting
             # one candidate must remove the whole evidence chain.
-            changed = conn.execute("UPDATE memories SET status='forgotten', updated_at=? WHERE id=? OR evidence=?", (_now(), memory_id, row["evidence"])).rowcount
-            conn.commit()
+            changed = session.execute(
+                update(MemoryRow)
+                .where(MemoryRow.user_id == uid, (MemoryRow.id == memory_id) | (MemoryRow.evidence == row.evidence))
+                .values(status="forgotten", updated_at=_now())
+            ).rowcount
+            session.commit()
             return bool(changed)
-        finally:
-            conn.close()
 
+    # ---------- 上下文 / 快照 / 统计 ----------
     def build_user_context(self, user_id: str, query: str = "") -> str:
         memories = self.search_user_memory(user_id, query, limit=6)
         if not memories:
@@ -204,12 +267,16 @@ class MemoryService:
         return "\n".join(lines)
 
     def recent_interactions(self, user_id: str, limit: int = 6) -> list[str]:
-        conn = self._connect(user_id)
-        try:
-            rows = conn.execute("SELECT message FROM interactions ORDER BY created_at DESC LIMIT ?", (max(1, min(limit, 20)),)).fetchall()
-            return [str(row["message"]) for row in reversed(rows)]
-        finally:
-            conn.close()
+        uid = _safe_id(user_id)
+        n = max(1, min(limit, 20))
+        with get_session(self._data_dir) as session:
+            rows = session.execute(
+                select(InteractionRow.message)
+                .where(InteractionRow.user_id == uid)
+                .order_by(InteractionRow.created_at.desc())
+                .limit(n)
+            ).scalars().all()
+            return [str(msg) for msg in reversed(rows)]
 
     def snapshot(self, user_id: str, limit: int = 20) -> dict[str, Any]:
         return {"user_id": _safe_id(user_id), "memories": self.search_user_memory(user_id, limit=limit)}
@@ -217,28 +284,26 @@ class MemoryService:
     def get_user_profile_stats(self, user_id: str) -> dict[str, Any]:
         """获取指定用户的记忆分类统计与画像概览（供管理员画像面板使用）。"""
         uid = _safe_id(user_id)
-        db_file = self.user_dir(uid) / "memory.sqlite3"
-        if not db_file.exists():
+        with get_session(self._data_dir) as session:
+            total_m = session.execute(
+                select(func.count()).select_from(MemoryRow).where(MemoryRow.user_id == uid, MemoryRow.status == "active")
+            ).scalar_one() or 0
+            total_i = session.execute(
+                select(func.count()).select_from(InteractionRow).where(InteractionRow.user_id == uid)
+            ).scalar_one() or 0
+            cat_rows = session.execute(
+                select(MemoryRow.category, func.count().label("c"))
+                .where(MemoryRow.user_id == uid, MemoryRow.status == "active")
+                .group_by(MemoryRow.category)
+            ).all()
+            categories = {str(row[0]): int(row[1]) for row in cat_rows}
+            avg_conf = session.execute(
+                select(func.avg(MemoryRow.confidence)).where(MemoryRow.user_id == uid, MemoryRow.status == "active")
+            ).scalar_one() or 0.0
             return {
                 "user_id": uid,
-                "total_memories": 0,
-                "total_interactions": 0,
-                "categories": {},
-                "avg_confidence": 0.0,
-            }
-        conn = self._connect(uid)
-        try:
-            total_m = conn.execute("SELECT COUNT(*) FROM memories WHERE status = 'active'").fetchone()[0]
-            total_i = conn.execute("SELECT COUNT(*) FROM interactions").fetchone()[0]
-            cat_rows = conn.execute("SELECT category, COUNT(*) as c FROM memories WHERE status = 'active' GROUP BY category").fetchall()
-            categories = {row["category"]: row["c"] for row in cat_rows}
-            avg_conf = conn.execute("SELECT AVG(confidence) FROM memories WHERE status = 'active'").fetchone()[0] or 0.0
-            return {
-                "user_id": uid,
-                "total_memories": total_m,
-                "total_interactions": total_i,
+                "total_memories": int(total_m),
+                "total_interactions": int(total_i),
                 "categories": categories,
                 "avg_confidence": round(float(avg_conf), 2),
             }
-        finally:
-            conn.close()

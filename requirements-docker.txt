@@ -1,0 +1,11 @@
+# Docker / Linux 生产镜像依赖（精简版：不含 torch/transformers，镜像小、启动快）
+# 人格估计走启发式（PERSONALITY_DISABLE_BERT=1，默认行为）。
+# 需要 BERT 人格时改用 requirements.txt（torch 会显著增大镜像）。
+flask>=3.0,<4
+pypdf>=4.0,<6
+python-docx>=1.1,<2
+python-pptx>=1.0,<2
+openpyxl>=3.1,<4
+sqlalchemy>=2.0,<3
+psycopg2-binary>=2.9,<3
+gunicorn>=21,<23

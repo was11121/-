@@ -11,6 +11,7 @@ try:
 except ImportError:
     pass
 from auth_runtime import AuthService
+from storage.db import get_database_url
 from unified_agent import InteractionEnvelope, UnifiedAgent
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 agent = UnifiedAgent()
@@ -59,9 +60,11 @@ def health():
     return jsonify({
         "status": "ok",
         "service": "reality-patch-agent",
-        "memory": "local-isolated",
+        "memory": "central-users-db",
         "auth": "active",
+        "database": get_database_url(None).split(":")[0].split("+")[0],
         "cognitive_engine": type(agent.cognitive).__name__,
+        "personality": agent.personality.encoder.info(),
     })
 # ----------------------------------------------------------------------
 # 认证与用户接口 (Auth Routes)
@@ -147,6 +150,7 @@ def admin_user_profile(target_user: str):
         "user_info": user_info,
         "stats": stats,
         "memories": memories,
+        "personality": agent.get_personality_profile(target_user),
     })
 # ----------------------------------------------------------------------
 # 智能交互与记忆操作 (支持用户身份严格绑定与普通用户隔离)
@@ -200,6 +204,18 @@ def user_memory(user_id: str):
         if user["role"] != "admin" and user["username"] != user_id and user["id"] != user_id:
             return jsonify({"error": "无权查看其他用户的记忆画像", "code": "FORBIDDEN"}), 403
     return jsonify({"user_id": user_id, "memories": agent.search_user_memory(user_id, request.args.get("q", ""), int(request.args.get("limit", 20)))})
+
+
+@app.get("/v1/users/<user_id>/personality")
+def user_personality(user_id: str):
+    """查询用户大五人格督促档案。普通用户只能查自己；管理员可查任意用户。"""
+    user = get_current_user()
+    if user:
+        if user["role"] != "admin" and user["username"] != user_id and user["id"] != user_id:
+            return jsonify({"error": "无权查看其他用户的人格档案", "code": "FORBIDDEN"}), 403
+    return jsonify(agent.get_personality_profile(user_id))
+
+
 @app.post("/v1/users/<user_id>/memory/<memory_id>/forget")
 def forget_memory(user_id: str, memory_id: str):
     user = get_current_user()
@@ -231,6 +247,44 @@ def library_list():
 @app.get("/v1/library/search")
 def library_search():
     return jsonify({"results": agent.search_library(request.args.get("q", ""), int(request.args.get("limit", 10)))})
+
+
+# ----------------------------------------------------------------------
+# 联网搜索与网页读取接口
+# ----------------------------------------------------------------------
+
+@app.get("/v1/web/info")
+def web_info():
+    return jsonify(agent.web_info())
+
+
+@app.post("/v1/web/search")
+def web_search_endpoint():
+    payload = request.get_json(silent=True) or {}
+    query = str(payload.get("query") or "")
+    if not query:
+        return jsonify({"error": "query is required"}), 400
+    limit = int(payload.get("limit") or 5)
+    try:
+        result = agent.web_search(query, limit=limit)
+        return jsonify(result)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.post("/v1/web/fetch")
+def web_fetch_endpoint():
+    payload = request.get_json(silent=True) or {}
+    url = str(payload.get("url") or "")
+    if not url:
+        return jsonify({"error": "url is required"}), 400
+    try:
+        result = agent.web_fetch(url)
+        return jsonify(result)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
 @app.post("/v1/sync/<session_id>/confirm")
 def sync_confirm(session_id: str):
     payload = request.get_json(silent=True) or {}
