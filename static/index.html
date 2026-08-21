@@ -3,15 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MyAgent Unified 控制台 - 现实补丁智能体</title>
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- FontAwesome 图标 -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-  <!-- Marked.js 用于 Markdown 渲染 -->
+  <title>MyAgent</title>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
-    /* ============ Claude / Anthropic 设计 Token ============ */
     :root {
       --ink: #141413;
       --cream: #faf9f5;
@@ -25,682 +19,455 @@
       --clay-deep: #c05f3e;
       --danger: #b3261e;
     }
-    html { background: var(--cream); }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
       background: var(--cream);
       color: var(--ink);
+      font-size: 14px;
+      line-height: 1.55;
+      display: flex;
+      flex-direction: column;
     }
-    .font-serif-editorial { font-family: Georgia, "Times New Roman", serif; }
-    .font-mono-label {
-      font-family: "JetBrains Mono", Consolas, monospace;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      font-size: 10px;
-    }
-    code, pre { font-family: 'JetBrains Mono', Consolas, monospace; }
+    button, input, select, textarea { border-radius: 0 !important; font: inherit; }
+    button { cursor: pointer; }
+    a { color: var(--clay-deep); }
+    code, pre { font-family: "JetBrains Mono", Consolas, monospace; font-size: 12px; }
+    .serif { font-family: Georgia, "Times New Roman", serif; }
+    .mono { font-family: "JetBrains Mono", Consolas, monospace; letter-spacing: 0.06em; text-transform: uppercase; font-size: 10px; color: var(--muted); }
 
-    /* 直角：所有按钮/输入框/卡片/页签 */
-    button, input, select, textarea, .rp-card, .rp-panel, .tab-btn, .lane-col, .badge {
-      border-radius: 0 !important;
+    .topbar {
+      height: 52px; display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; border-bottom: 1px solid var(--hairline); background: var(--cream);
+      position: sticky; top: 0; z-index: 40;
     }
-
-    /* 按钮体系 */
-    .rp-btn {
-      display: inline-flex; align-items: center; justify-content: center;
-      gap: 6px; font-size: 13px; font-weight: 500;
-      padding: 8px 16px; cursor: pointer; transition: all 0.12s ease;
-      border: 1px solid transparent;
+    .brand { display: flex; align-items: baseline; gap: 10px; }
+    .brand h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
+    .nav { display: flex; gap: 22px; align-items: center; }
+    .nav-link {
+      background: none; border: none; padding: 0 0 10px; margin-bottom: -1px;
+      color: var(--muted); font-size: 13px; border-bottom: 1px solid transparent;
     }
-    .rp-btn-dark { background: var(--ink); color: var(--cream); border-color: var(--ink); }
-    .rp-btn-dark:hover { background: #000; }
-    .rp-btn-outline { background: transparent; color: var(--ink); border-color: var(--hairline-strong); }
-    .rp-btn-outline:hover { border-color: var(--ink); background: var(--cream-deep); }
-    .rp-btn-ghost { background: transparent; color: var(--muted); border-color: transparent; }
-    .rp-btn-ghost:hover { color: var(--ink); background: var(--cream-deep); }
-    .rp-btn-danger { background: transparent; color: var(--danger); border-color: #e2b6b2; }
-    .rp-btn-danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
-    .rp-btn-sm { padding: 4px 10px; font-size: 12px; gap: 4px; }
-    .rp-btn-block { width: 100%; }
-
-    /* 输入框 */
-    .rp-input, .rp-textarea {
-      background: var(--paper); border: 1px solid var(--hairline-strong);
-      padding: 8px 12px; font-size: 13px; color: var(--ink); width: 100%;
-      outline: none; transition: border-color 0.12s, box-shadow 0.12s;
+    .nav-link:hover { color: var(--ink); }
+    .nav-link-active { color: var(--ink); border-bottom-color: var(--ink); }
+    .top-meta { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--muted); }
+    .top-meta input, .top-meta select {
+      border: none; border-bottom: 1px solid var(--hairline-strong); background: transparent;
+      color: var(--ink); padding: 2px 4px; outline: none; min-width: 72px;
     }
-    .rp-input:focus, .rp-textarea:focus {
-      border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink);
+    .top-meta input:focus, .top-meta select:focus { border-bottom-color: var(--ink); }
+    .status-dot { display: inline-flex; align-items: center; gap: 6px; }
+    .status-dot::before { content: ""; width: 6px; height: 6px; background: var(--faint); border-radius: 50%; }
+    .status-dot.ok::before { background: #3f7d4e; }
+    .status-dot.err::before { background: var(--danger); }
+    .role-badge { font-size: 10px; color: var(--muted); border: 1px solid var(--hairline-strong); padding: 1px 6px; }
+    .role-badge.role-admin { color: var(--clay-deep); border-color: #e8c4b6; }
+    .ghost-btn { background: none; border: none; color: var(--muted); font-size: 12px; padding: 4px 0; }
+    .ghost-btn:hover { color: var(--ink); }
+
+    main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .tab-pane { display: none; flex: 1; min-height: 0; flex-direction: column; }
+    .tab-pane:not(.hidden) { display: flex; }
+    .hidden { display: none !important; }
+
+    #tab-chat { max-width: 760px; width: 100%; margin: 0 auto; }
+    #chatMessages { flex: 1; overflow-y: auto; padding: 40px 20px 24px; }
+    .welcome { max-width: 560px; margin: 48px auto 24px; text-align: left; }
+    .welcome h2 { font-family: Georgia, "Times New Roman", serif; font-size: 28px; font-weight: 500; margin: 0 0 12px; letter-spacing: -0.02em; }
+    .welcome p { color: var(--muted); margin: 0 0 8px; font-size: 14px; }
+    .msg-row { margin: 0 auto 22px; max-width: 680px; }
+    .msg-row-user { display: flex; justify-content: flex-end; }
+    .msg-user {
+      background: var(--ink); color: var(--cream); padding: 10px 14px; max-width: 85%;
+      font-size: 14px; line-height: 1.5; white-space: pre-wrap;
     }
-    .rp-input::placeholder, .rp-textarea::placeholder { color: var(--faint); }
-
-    /* 卡片 / 面板 */
-    .rp-card { background: var(--paper); border: 1px solid var(--hairline); }
-    .rp-panel { background: var(--cream-deep); border: 1px solid var(--hairline); }
-    .rp-eyebrow { font-family: "JetBrains Mono", Consolas, monospace; text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; color: var(--muted); }
-    .rp-chip {
-      font-size: 12px; color: var(--muted); background: transparent;
-      border: none; padding: 2px 6px; cursor: pointer; white-space: nowrap;
-      transition: color 0.12s;
+    .msg-agent { max-width: 100%; }
+    .agent-content { font-size: 15px; color: var(--ink); line-height: 1.65; }
+    .agent-extras { margin-top: 12px; display: grid; gap: 8px; }
+    .thinking { color: var(--faint); font-size: 13px; }
+    .soft-card { border: 1px solid var(--hairline); background: var(--paper); padding: 12px 14px; font-size: 12px; color: var(--muted); }
+    .tip-card { border-left: 2px solid var(--clay); }
+    .composer { border-top: 1px solid var(--hairline); padding: 14px 20px 22px; background: var(--cream); }
+    .composer-inner { max-width: 680px; margin: 0 auto; }
+    .chips { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-bottom: 10px; color: var(--faint); font-size: 12px; }
+    .chip { background: none; border: none; color: var(--muted); padding: 0; font-size: 12px; }
+    .chip:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+    .composer-box { display: flex; gap: 10px; align-items: flex-end; border: 1px solid var(--hairline-strong); background: var(--paper); padding: 10px 12px; }
+    .composer-box:focus-within { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+    #chatInput {
+      flex: 1; border: none; outline: none; resize: none; min-height: 24px; max-height: 140px;
+      background: transparent; color: var(--ink); padding: 4px 0; font-size: 14px;
     }
-    .rp-chip:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+    .send { background: var(--ink); color: var(--cream); border: 1px solid var(--ink); padding: 8px 14px; font-size: 13px; }
+    .send:hover { background: #000; }
+    .composer-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 11px; color: var(--faint); }
+    .toggle { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); }
+    .toggle input { accent-color: var(--ink); }
 
-    /* 侧边导航 */
-    .tab-btn { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px; font-size: 13px; font-weight: 500; color: var(--muted); transition: all 0.12s; border: 1px solid transparent; }
-    .tab-btn:hover { background: var(--cream-deep); color: var(--ink); }
-    .tab-btn-active { background: var(--ink) !important; color: var(--cream) !important; }
-
-    /* 状态徽标：等宽 + 边框 + 圆点 */
-    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border: 1px solid var(--hairline-strong); font-family: "JetBrains Mono", Consolas, monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); background: transparent; }
-    .badge::before { content: ''; width: 6px; height: 6px; border-radius: 9999px; background: var(--faint); display: inline-block; }
+    .page { max-width: 980px; width: 100%; margin: 0 auto; padding: 36px 24px 64px; overflow-y: auto; }
+    .page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 1px solid var(--hairline); }
+    .page-head h2 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: 26px; font-weight: 500; letter-spacing: -0.02em; }
+    .page-head p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid transparent; padding: 8px 14px; font-size: 13px; background: transparent; color: var(--ink); }
+    .btn-primary { background: var(--ink); color: var(--cream); border-color: var(--ink); }
+    .btn-primary:hover { background: #000; }
+    .btn-outline { border-color: var(--hairline-strong); }
+    .btn-outline:hover { border-color: var(--ink); background: var(--cream-deep); }
+    .btn-danger { color: var(--danger); border-color: #e2b6b2; }
+    .btn-danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+    .btn-block { width: 100%; }
+    .field { width: 100%; border: 1px solid var(--hairline-strong); background: var(--paper); padding: 9px 12px; color: var(--ink); outline: none; }
+    .field:focus { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+    .field::placeholder { color: var(--faint); }
+    textarea.field { min-height: 96px; resize: vertical; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .grid-3 { display: grid; grid-template-columns: 280px 1fr; gap: 24px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .stat { padding: 16px 0; border-bottom: 1px solid var(--hairline); }
+    .stat .label { font-size: 12px; color: var(--muted); }
+    .stat .value { font-family: Georgia, "Times New Roman", serif; font-size: 28px; margin-top: 4px; }
+    .lanes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 20px 0 28px; }
+    .lane { border: 1px solid var(--hairline); background: var(--cream-deep); padding: 12px; min-height: 180px; }
+    .lane-h { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--hairline); }
+    .lane-card { background: var(--paper); border: 1px solid var(--hairline); padding: 10px 12px; margin-bottom: 8px; font-size: 12px; }
+    .lane-card .meta { color: var(--muted); font-size: 11px; display: flex; justify-content: space-between; margin-bottom: 4px; }
+    .table-wrap { overflow-x: auto; border-top: 1px solid var(--hairline); }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { text-align: left; color: var(--muted); font-weight: 500; padding: 10px 8px; border-bottom: 1px solid var(--hairline-strong); }
+    td { padding: 10px 8px; border-bottom: 1px solid var(--hairline); vertical-align: top; }
+    tr:hover td { background: var(--cream-deep); }
+    .badge { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--hairline-strong); padding: 2px 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-family: "JetBrains Mono", Consolas, monospace; }
+    .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
     .badge-ok::before { background: #3f7d4e; }
     .badge-warn::before { background: var(--clay); }
     .badge-err::before { background: var(--danger); }
-    .badge-info::before { background: #5d7f9e; }
-
-    /* 页签切换：文字 + 下划线 */
-    .tabs-line { display: flex; gap: 24px; border-bottom: 1px solid var(--hairline); }
-    .tabs-line .tab-line-btn { padding: 8px 2px; font-size: 13px; font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent; cursor: pointer; }
-    .tabs-line .tab-line-btn:hover { color: var(--ink); }
-    .tab-line-btn-active { color: var(--ink) !important; border-bottom-color: var(--ink) !important; }
-
-    /* 表格 */
-    .rp-table { width: 100%; font-size: 12px; border-collapse: collapse; color: var(--ink); }
-    .rp-table th { text-align: left; padding: 10px 12px; font-weight: 500; color: var(--muted); border-bottom: 1px solid var(--hairline-strong); }
-    .rp-table td { padding: 10px 12px; border-bottom: 1px solid var(--hairline); }
-    .rp-table tbody tr:hover { background: var(--cream-deep); }
-
-    /* 滚动条 */
-    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--hairline-strong); border-radius: 0; }
-    .prose p { margin-bottom: 0.5rem; }
-    .prose ul { list-style-type: disc; margin-left: 1.25rem; margin-bottom: 0.5rem; }
-    .prose ol { list-style-type: decimal; margin-left: 1.25rem; margin-bottom: 0.5rem; }
-    .prose a { color: var(--clay-deep); text-decoration: underline; }
+    .drop { border: 1px dashed var(--hairline-strong); padding: 28px 16px; text-align: center; color: var(--muted); cursor: pointer; background: var(--paper); }
+    .drop:hover { border-color: var(--ink); color: var(--ink); }
+    .stack { display: grid; gap: 12px; }
+    .list { display: grid; gap: 10px; }
+    .doc, .mem, .web-item { border: 1px solid var(--hairline); background: var(--paper); padding: 14px; font-size: 13px; }
+    .muted { color: var(--muted); }
+    .faint { color: var(--faint); }
+    .row { display: flex; align-items: center; gap: 8px; }
+    .row-between { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .search-row { display: flex; gap: 8px; margin-bottom: 14px; }
+    .search-row .field { flex: 1; }
+    .traits { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+    .trait { border: 1px solid var(--hairline); background: var(--paper); padding: 10px; }
+    .bar { height: 3px; background: var(--cream-deep); margin: 8px 0; }
+    .bar > div { height: 100%; background: var(--ink); }
+    .prose p { margin: 0 0 0.7em; }
+    .prose ul, .prose ol { margin: 0 0 0.7em 1.2em; }
     .prose strong { color: var(--ink); }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--hairline-strong); }
 
-    /* 泳道 */
-    .lane-col { background: var(--cream-deep); border: 1px solid var(--hairline); padding: 12px; display: flex; flex-direction: column; gap: 12px; }
-    .lane-card { background: var(--paper); border: 1px solid var(--hairline); padding: 10px 12px; }
+    #authOverlay {
+      position: fixed; inset: 0; background: rgba(20,20,19,0.55); display: flex; align-items: center; justify-content: center; z-index: 80; padding: 24px;
+    }
+    .auth-card { width: 100%; max-width: 380px; background: var(--paper); border: 1px solid var(--hairline); padding: 28px; }
+    .auth-card h2 { margin: 0 0 6px; font-family: Georgia, "Times New Roman", serif; font-size: 24px; font-weight: 500; }
+    .auth-card .sub { color: var(--muted); font-size: 12px; margin-bottom: 18px; }
+    .auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-bottom: 16px; border-bottom: 1px solid var(--hairline); }
+    .auth-tab { background: none; border: none; padding: 10px 0; color: var(--muted); border-bottom: 1px solid transparent; margin-bottom: -1px; }
+    .auth-tab-active { color: var(--ink); border-bottom-color: var(--ink); }
+    .auth-form { display: grid; gap: 10px; }
+    .auth-error { color: var(--danger); font-size: 12px; }
+    .demo { margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .demo button { border: 1px solid var(--hairline-strong); background: transparent; padding: 8px; font-size: 11px; color: var(--muted); }
+    .demo button:hover { border-color: var(--ink); color: var(--ink); }
 
-    /* 进度条 */
-    .rp-bar { height: 4px; background: var(--cream-deep); border-radius: 0; overflow: hidden; }
-    .rp-bar > div { height: 100%; background: var(--ink); }
+    /* aliases for older JS templates */
+    .rp-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:13px;font-weight:500;padding:8px 14px;border:1px solid transparent;background:transparent;color:var(--ink);cursor:pointer}
+    .rp-btn-dark{background:var(--ink);color:var(--cream);border-color:var(--ink)}
+    .rp-btn-outline{border-color:var(--hairline-strong)}
+    .rp-btn-outline:hover{border-color:var(--ink);background:var(--cream-deep)}
+    .rp-btn-ghost{color:var(--muted);border:none}
+    .rp-btn-danger{color:var(--danger);border-color:#e2b6b2}
+    .rp-btn-sm{padding:4px 10px;font-size:12px}
+    .rp-btn-block{width:100%}
+    .rp-card,.rp-panel{border:1px solid var(--hairline);background:var(--paper);padding:12px 14px}
+    .rp-input,.rp-textarea{width:100%;border:1px solid var(--hairline-strong);background:var(--paper);padding:9px 12px;color:var(--ink);outline:none}
+    .rp-eyebrow,.mono{font-family:"JetBrains Mono",Consolas,monospace;letter-spacing:.06em;text-transform:uppercase;font-size:10px;color:var(--muted)}
+    .rp-bar{height:3px;background:var(--cream-deep);overflow:hidden}
+    .rp-bar>div{height:100%;background:var(--ink)}
+    .rp-table{width:100%;border-collapse:collapse;font-size:12px}
+    .lane-col{border:1px solid var(--hairline);background:var(--cream-deep);padding:12px}
+    .font-serif-editorial{font-family:Georgia,"Times New Roman",serif}
+
+    @media (max-width: 900px) {
+      .nav { display: none; }
+      .grid-3, .grid-4, .lanes, .traits, .grid-2 { grid-template-columns: 1fr; }
+      .topbar { padding: 0 16px; }
+    }
   </style>
 </head>
-<body class="min-h-screen flex flex-col antialiased">
-
-  <!-- 顶部导航栏 -->
-  <header class="bg-white border-b border-[var(--hairline)] sticky top-0 z-50 px-6 py-3.5 flex items-center justify-between">
-    <div class="flex items-center space-x-3">
-      <div class="w-9 h-9 bg-[var(--ink)] flex items-center justify-center">
-        <i class="fa-solid fa-atom text-[var(--cream)] text-lg"></i>
-      </div>
-      <div>
-        <h1 class="text-base font-serif-editorial font-bold tracking-tight text-[var(--ink)] flex items-center space-x-2">
-          <span>MyAgent Unified</span>
-          <span class="font-mono-label px-2 py-0.5 bg-[var(--cream-deep)] text-[var(--muted)] border border-[var(--hairline)]">RealityPatch Core</span>
-        </h1>
-        <p class="text-xs text-[var(--muted)]">用户记忆 · 权威知识库 · 项目秘书 · 现实补丁 · 联网搜索</p>
-      </div>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1 class="serif">MyAgent</h1>
+      <span class="mono status-dot" id="healthBadge"><span id="healthText">就绪</span></span>
     </div>
-
-    <!-- 用户与工作区上下文切换 -->
-    <div class="flex items-center space-x-3">
-      <div id="authUserBar" class="hidden items-center bg-[var(--cream-deep)] px-3 py-1.5 border border-[var(--hairline)] text-xs space-x-2">
-        <i class="fa-regular fa-user text-[var(--ink)]"></i>
-        <span id="authDisplayName" class="text-[var(--ink)] font-medium">未登录</span>
-        <span id="authRoleBadge" class="px-1.5 py-0.5 bg-white text-[var(--muted)] border border-[var(--hairline-strong)] font-mono-label">user</span>
+    <nav class="nav">
+      <button class="nav-link nav-link-active" id="tabBtn-chat" onclick="switchTab('chat')">对话</button>
+      <button class="nav-link" id="tabBtn-kanban" onclick="switchTab('kanban')">看板</button>
+      <button class="nav-link" id="tabBtn-library" onclick="switchTab('library')">知识库</button>
+      <button class="nav-link" id="tabBtn-memory" onclick="switchTab('memory')">记忆</button>
+      <button class="nav-link" id="tabBtn-web" onclick="switchTab('web')">联网</button>
+    </nav>
+    <div class="top-meta">
+      <div id="authUserBar" class="hidden row">
+        <span id="authDisplayName">未登录</span>
+        <span id="authRoleBadge" class="role-badge">user</span>
       </div>
-
-      <div id="adminUserSwitcher" class="hidden items-center bg-[var(--cream-deep)] px-3 py-1.5 border border-[var(--hairline)] text-xs space-x-2">
-        <i class="fa-solid fa-user-secret text-[var(--clay)]"></i>
-        <span class="text-[var(--muted)]">画像目标:</span>
-        <select id="adminTargetSelect" onchange="onAdminTargetChange()" class="bg-transparent text-[var(--ink)] font-medium focus:outline-none max-w-[120px]"></select>
+      <div id="adminUserSwitcher" class="hidden row">
+        <span>画像</span>
+        <select id="adminTargetSelect" onchange="onAdminTargetChange()"></select>
       </div>
-
-      <div class="flex items-center bg-[var(--cream-deep)] px-3 py-1.5 border border-[var(--hairline)] text-xs space-x-2">
-        <i class="fa-solid fa-folder-tree text-[var(--ink)]"></i>
-        <span class="text-[var(--muted)]">工作区:</span>
-        <input id="workspaceIdInput" type="text" value="default" class="bg-transparent text-[var(--ink)] font-medium focus:outline-none w-24 border-b border-[var(--hairline-strong)] focus:border-[var(--ink)] text-center transition" title="输入项目工作区ID" />
+      <div class="row">
+        <span>工作区</span>
+        <input id="workspaceIdInput" type="text" value="default" title="工作区 ID" />
       </div>
-
-      <button id="logoutBtn" onclick="handleLogout()" class="hidden rp-btn rp-btn-outline rp-btn-sm">
-        <i class="fa-solid fa-right-from-bracket mr-1"></i>退出
-      </button>
-
-      <div id="healthBadge" class="badge badge-ok">
-        <span id="healthText">服务就绪</span>
-      </div>
+      <span class="mono" id="cogEngineName" title="认知引擎">PythonEngine</span>
+      <button id="logoutBtn" class="ghost-btn hidden" onclick="handleLogout()">退出</button>
     </div>
   </header>
 
-  <!-- 主应用体：侧边标签页 + 主内容区 -->
-  <div class="flex-1 flex overflow-hidden">
-    <!-- 侧边导航栏 -->
-    <nav class="w-64 bg-[var(--cream-deep)] border-r border-[var(--hairline)] flex flex-col justify-between p-4 select-none">
-      <div class="space-y-1.5">
-        <div class="rp-eyebrow mb-2 px-2">Modules</div>
-        <button onclick="switchTab('chat')" id="tabBtn-chat" class="tab-btn tab-btn-active">
-          <i class="fa-solid fa-comments w-5 text-center"></i>
-          <span>智能交互工作台</span>
-        </button>
-
-        <button onclick="switchTab('kanban')" id="tabBtn-kanban" class="tab-btn">
-          <i class="fa-solid fa-table-columns w-5 text-center"></i>
-          <span>秘书看板与补丁</span>
-        </button>
-
-        <button onclick="switchTab('library')" id="tabBtn-library" class="tab-btn">
-          <i class="fa-solid fa-book-bookmark w-5 text-center"></i>
-          <span>文档知识库</span>
-        </button>
-
-        <button onclick="switchTab('memory')" id="tabBtn-memory" class="tab-btn">
-          <i class="fa-solid fa-brain w-5 text-center"></i>
-          <span>用户记忆与画像</span>
-        </button>
-
-        <button onclick="switchTab('web')" id="tabBtn-web" class="tab-btn">
-          <i class="fa-solid fa-globe w-5 text-center"></i>
-          <span>联网搜索</span>
-        </button>
-      </div>
-
-      <!-- 底部系统与模型状态信息卡 -->
-      <div class="bg-white p-3.5 border border-[var(--hairline)] space-y-2 text-xs">
-        <div class="flex items-center justify-between text-[var(--muted)]">
-          <span class="flex items-center space-x-1.5">
-            <i class="fa-solid fa-microchip text-[var(--faint)]"></i>
-            <span>认知引擎:</span>
-          </span>
-          <span id="cogEngineName" class="text-[var(--ink)] font-mono font-medium">PythonEngine</span>
-        </div>
-        <div class="flex items-center justify-between text-[var(--muted)]">
-          <span class="flex items-center space-x-1.5">
-            <i class="fa-solid fa-bolt text-[var(--clay)]"></i>
-            <span>接入模型:</span>
-          </span>
-          <span class="text-[var(--ink)] font-mono truncate max-w-[110px]" title="deepseek-v4-flash @ poke2api">deepseek-v4-flash</span>
-        </div>
-        <div class="flex items-center justify-between text-[var(--muted)] pt-1 border-t border-[var(--hairline)]">
-          <span>流式 SSE:</span>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" id="streamToggle" class="sr-only peer" checked>
-            <div class="w-8 h-4 bg-[var(--hairline-strong)] peer-checked:bg-[var(--ink)] peer-focus:outline-none peer-focus:ring-1 peer-focus:ring-[var(--ink)] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-3 after:w-3.5 after:transition-all"></div>
-          </label>
+  <main>
+    <section id="tab-chat" class="tab-pane">
+      <div id="chatMessages" class="custom-scrollbar">
+        <div class="welcome">
+          <h2>有什么想处理的？</h2>
+          <p>记录偏好、整理任务、检索知识库，或直接联网查资料。</p>
+          <p class="faint">也可以输入 <code>!search 关键词</code>。</p>
         </div>
       </div>
-    </nav>
-
-    <!-- 核心内容展示区 -->
-    <main class="flex-1 bg-[var(--cream)] flex flex-col overflow-hidden relative">
-
-      <!-- ================= TAB 1: 智能交互工作台 (Chat) ================= -->
-      <section id="tab-chat" class="tab-pane flex-1 flex flex-col h-full overflow-hidden">
-        <!-- 对话流消息列表 -->
-        <div id="chatMessages" class="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-          <!-- 欢迎消息 -->
-          <div class="flex items-start space-x-3.5 max-w-3xl">
-            <div class="w-8 h-8 bg-[var(--ink)] flex-shrink-0 flex items-center justify-center text-[var(--cream)] text-sm">
-              <i class="fa-solid fa-robot"></i>
+      <div class="composer">
+        <div class="composer-inner">
+          <div class="chips">
+            <span>试试</span>
+            <button type="button" class="chip" onclick="fillChatInput('我平时最喜欢喝拿铁咖啡，每天早上需要一杯')">记录习惯</button>
+            <button type="button" class="chip" onclick="fillChatInput('创建一个任务：完成系统前后端联调测试')">拟定任务补丁</button>
+            <button type="button" class="chip" onclick="fillChatInput('请根据知识库资料介绍一下相关背景')">知识库检索</button>
+            <button type="button" class="chip" onclick="fillChatInput('同步任务：1. 修复文件上传400异常；2. 增加补丁实体状态机；3. 完善记忆检索过滤')">批量同步草稿</button>
+            <button type="button" class="chip" onclick="fillChatInput('!search 今天有什么大新闻')">联网搜索</button>
+          </div>
+          <form id="chatForm" onsubmit="handleChatSubmit(event)">
+            <div class="composer-box">
+              <textarea id="chatInput" rows="1" placeholder="写一条消息…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.form.requestSubmit();}"></textarea>
+              <button type="submit" id="sendBtn" class="send">发送</button>
             </div>
-            <div class="space-y-2">
-              <div class="bg-white border border-[var(--hairline)] px-4 py-3 text-[var(--ink)] text-sm prose leading-relaxed">
-                您好！我是 <strong>MyAgent Unified 现实补丁智能体</strong>。<br />
-                我具备以下核心能力：
-                <ul class="mt-2 space-y-1">
-                  <li><strong>用户个性化记忆</strong>：自动沉淀您的偏好、指令与身份，支持反馈与遗忘。</li>
-                  <li><strong>权威知识库检索</strong>：支持多格式文件上传与引用溯源。</li>
-                  <li><strong>联网实时搜索</strong>：搜索关键词、读取网页，随时获取最新信息（试试 <span class="font-mono text-[var(--clay-deep)]">!search 新闻</span>）。</li>
-                  <li><strong>现实补丁与项目秘书</strong>：智能解析任务与会议进展，支持「草稿 &rarr; 确认 &rarr; 回滚」安全状态机。</li>
-                  <li><strong>启发式 Tip 提示</strong>：主动捕捉潜在循环与决策风险。</li>
-                </ul>
-              </div>
-              <div class="text-[11px] text-[var(--muted)] flex items-center space-x-2">
-                <span>System Agent</span>
-                <span>•</span>
-                <span>Ready</span>
-              </div>
-            </div>
+          </form>
+          <div class="composer-foot">
+            <label class="toggle"><input type="checkbox" id="streamToggle" checked /> 流式输出</label>
+            <span>Enter 发送 · Shift+Enter 换行</span>
           </div>
         </div>
+      </div>
+    </section>
 
-        <!-- 底部输入框 -->
-        <div class="p-4 bg-white border-t border-[var(--hairline)]">
-          <div class="max-w-4xl mx-auto space-y-2">
-            <!-- 快捷指令建议 -->
-            <div class="flex items-center space-x-1 text-xs overflow-x-auto pb-1 text-[var(--muted)] custom-scrollbar">
-              <span class="text-[var(--faint)] flex-shrink-0">尝试输入</span>
-              <button onclick="fillChatInput('我平时最喜欢喝拿铁咖啡，每天早上需要一杯')" class="rp-chip">记录习惯</button>
-              <button onclick="fillChatInput('创建一个任务：完成系统前后端联调测试')" class="rp-chip">拟定任务补丁</button>
-              <button onclick="fillChatInput('请根据知识库资料介绍一下相关背景')" class="rp-chip">知识库检索</button>
-              <button onclick="fillChatInput('同步任务：1. 修复文件上传400异常；2. 增加补丁实体状态机；3. 完善记忆检索过滤')" class="rp-chip">批量同步草稿</button>
-              <button onclick="fillChatInput('!search 今天有什么大新闻')" class="rp-chip">联网搜索</button>
-            </div>
-
-            <!-- 输入表单 -->
-            <form id="chatForm" onsubmit="handleChatSubmit(event)" class="relative flex items-center">
-              <input
-                id="chatInput"
-                type="text"
-                placeholder="与 Agent 对话、下发任务或询问知识库..."
-                class="rp-input pl-4 pr-28 py-3 text-sm"
-              />
-              <div class="absolute right-2 flex items-center space-x-1.5">
-                <button
-                  type="submit"
-                  id="sendBtn"
-                  class="rp-btn rp-btn-dark text-xs"
-                >
-                  <span>发送</span>
-                  <i class="fa-solid fa-arrow-up text-xs"></i>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </section>
-
-      <!-- ================= TAB 2: 秘书看板与补丁 (Kanban) ================= -->
-      <section id="tab-kanban" class="tab-pane hidden flex-1 flex flex-col h-full p-6 overflow-y-auto custom-scrollbar space-y-6">
-        <!-- 看板头部概览 -->
-        <div class="flex items-center justify-between pb-4 border-b border-[var(--hairline)]">
+    <section id="tab-kanban" class="tab-pane hidden">
+      <div class="page custom-scrollbar">
+        <div class="page-head">
           <div>
-            <h2 class="text-xl font-serif-editorial font-bold text-[var(--ink)] flex items-center space-x-2">
-              <i class="fa-solid fa-table-columns text-[var(--ink)]"></i>
-              <span>项目任务看板 & 现实补丁管理</span>
-            </h2>
-            <p class="text-xs text-[var(--muted)] mt-1">支持现实补丁（RealityPatch）原子确认与回滚，保障多渠道操作的一致性与可审计性。</p>
+            <h2>看板</h2>
+            <p>任务泳道与现实补丁确认 / 回滚</p>
           </div>
-          <button onclick="loadDashboard()" class="rp-btn rp-btn-outline rp-btn-sm">
-            <i class="fa-solid fa-rotate text-xs"></i>
-            <span>刷新看板</span>
-          </button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="loadDashboard()">刷新</button>
         </div>
-
-        <!-- 任务统计卡片 -->
-        <div class="grid grid-cols-4 gap-4">
-          <div class="rp-card p-4 flex items-center justify-between">
-            <div>
-              <p class="text-xs font-medium text-[var(--muted)]">待办任务 (Todo)</p>
-              <h3 id="countTodo" class="text-2xl font-serif-editorial font-bold text-[var(--ink)] mt-1">0</h3>
-            </div>
-            <div class="w-10 h-10 bg-[var(--cream-deep)] text-[var(--muted)] flex items-center justify-center text-lg"><i class="fa-regular fa-circle-dot"></i></div>
-          </div>
-          <div class="rp-card p-4 flex items-center justify-between">
-            <div>
-              <p class="text-xs font-medium text-[var(--muted)]">进行中 (In Progress)</p>
-              <h3 id="countInProgress" class="text-2xl font-serif-editorial font-bold text-[var(--ink)] mt-1">0</h3>
-            </div>
-            <div class="w-10 h-10 bg-[var(--cream-deep)] text-[var(--clay)] flex items-center justify-center text-lg"><i class="fa-solid fa-spinner animate-spin"></i></div>
-          </div>
-          <div class="rp-card p-4 flex items-center justify-between">
-            <div>
-              <p class="text-xs font-medium text-[var(--muted)]">受阻 (Blocked)</p>
-              <h3 id="countBlocked" class="text-2xl font-serif-editorial font-bold text-[var(--ink)] mt-1">0</h3>
-            </div>
-            <div class="w-10 h-10 bg-[var(--cream-deep)] text-[var(--danger)] flex items-center justify-center text-lg"><i class="fa-solid fa-circle-exclamation"></i></div>
-          </div>
-          <div class="rp-card p-4 flex items-center justify-between">
-            <div>
-              <p class="text-xs font-medium text-[var(--muted)]">已完成 (Done)</p>
-              <h3 id="countDone" class="text-2xl font-serif-editorial font-bold text-[var(--ink)] mt-1">0</h3>
-            </div>
-            <div class="w-10 h-10 bg-[var(--cream-deep)] text-[var(--clay-deep)] flex items-center justify-center text-lg"><i class="fa-solid fa-check-double"></i></div>
-          </div>
+        <div class="grid-4">
+          <div class="stat"><div class="label">待办</div><div class="value" id="countTodo">0</div></div>
+          <div class="stat"><div class="label">进行中</div><div class="value" id="countInProgress">0</div></div>
+          <div class="stat"><div class="label">受阻</div><div class="value" id="countBlocked">0</div></div>
+          <div class="stat"><div class="label">完成</div><div class="value" id="countDone">0</div></div>
         </div>
-
-        <!-- 任务四列泳道 -->
-        <div class="grid grid-cols-4 gap-4 flex-1">
-          <!-- 列1: Todo -->
-          <div class="lane-col">
-            <div class="flex items-center justify-between text-xs font-semibold text-[var(--ink)] pb-2 border-b border-[var(--hairline)]">
-              <span class="flex items-center space-x-1.5"><span class="badge-dot w-2 h-2 rounded-full bg-[var(--faint)]"></span><span>待办 (Todo)</span></span>
-              <span id="badgeTodo" class="badge">0</span>
-            </div>
-            <div id="laneTodo" class="space-y-2.5 flex-1 min-h-[160px] custom-scrollbar overflow-y-auto"></div>
-          </div>
-
-          <!-- 列2: In Progress -->
-          <div class="lane-col">
-            <div class="flex items-center justify-between text-xs font-semibold text-[var(--ink)] pb-2 border-b border-[var(--hairline)]">
-              <span class="flex items-center space-x-1.5"><span class="badge-dot w-2 h-2 rounded-full bg-[var(--clay)]"></span><span>进行中 (In Progress)</span></span>
-              <span id="badgeInProgress" class="badge">0</span>
-            </div>
-            <div id="laneInProgress" class="space-y-2.5 flex-1 min-h-[160px] custom-scrollbar overflow-y-auto"></div>
-          </div>
-
-          <!-- 列3: Blocked -->
-          <div class="lane-col">
-            <div class="flex items-center justify-between text-xs font-semibold text-[var(--ink)] pb-2 border-b border-[var(--hairline)]">
-              <span class="flex items-center space-x-1.5"><span class="badge-dot w-2 h-2 rounded-full bg-[var(--danger)]"></span><span>受阻 (Blocked)</span></span>
-              <span id="badgeBlocked" class="badge">0</span>
-            </div>
-            <div id="laneBlocked" class="space-y-2.5 flex-1 min-h-[160px] custom-scrollbar overflow-y-auto"></div>
-          </div>
-
-          <!-- 列4: Done -->
-          <div class="lane-col">
-            <div class="flex items-center justify-between text-xs font-semibold text-[var(--ink)] pb-2 border-b border-[var(--hairline)]">
-              <span class="flex items-center space-x-1.5"><span class="badge-dot w-2 h-2 rounded-full bg-[#3f7d4e]"></span><span>已完成 (Done)</span></span>
-              <span id="badgeDone" class="badge">0</span>
-            </div>
-            <div id="laneDone" class="space-y-2.5 flex-1 min-h-[160px] custom-scrollbar overflow-y-auto"></div>
-          </div>
+        <div class="lanes">
+          <div class="lane"><div class="lane-h"><span>待办</span><span id="badgeTodo">0</span></div><div id="laneTodo"></div></div>
+          <div class="lane"><div class="lane-h"><span>进行中</span><span id="badgeInProgress">0</span></div><div id="laneInProgress"></div></div>
+          <div class="lane"><div class="lane-h"><span>受阻</span><span id="badgeBlocked">0</span></div><div id="laneBlocked"></div></div>
+          <div class="lane"><div class="lane-h"><span>完成</span><span id="badgeDone">0</span></div><div id="laneDone"></div></div>
         </div>
-
-        <!-- 现实补丁审计流与管理 -->
-        <div class="rp-card p-5 space-y-4">
-          <div class="flex items-center justify-between">
-            <h3 class="text-sm font-serif-editorial font-bold text-[var(--ink)] flex items-center space-x-2">
-              <i class="fa-solid fa-file-shield text-[var(--clay)]"></i>
-              <span>现实补丁审计流水 (Reality Patches)</span>
-            </h3>
-            <span class="text-xs text-[var(--muted)]">补丁确认将写入实体表，回滚将恢复原始状态</span>
-          </div>
-
-          <div class="overflow-x-auto">
-            <table class="rp-table">
-              <thead>
-                <tr>
-                  <th>补丁 ID</th>
-                  <th>目标类型</th>
-                  <th>操作</th>
-                  <th>变更提议</th>
-                  <th>状态</th>
-                  <th>创建者/时间</th>
-                  <th class="text-right">操作</th>
-                </tr>
-              </thead>
-              <tbody id="patchTableBody">
-                <tr><td colspan="7" class="p-4 text-center text-[var(--muted)]">暂无补丁数据</td></tr>
-              </tbody>
-            </table>
-          </div>
+        <div class="row-between" style="margin-bottom:10px">
+          <h3 class="serif" style="margin:0;font-size:18px;font-weight:500">现实补丁</h3>
+          <span class="muted" style="font-size:12px">确认写入实体，回滚可恢复</span>
         </div>
-      </section>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th><th>目标</th><th>操作</th><th>变更</th><th>状态</th><th>创建</th><th style="text-align:right">动作</th>
+              </tr>
+            </thead>
+            <tbody id="patchTableBody">
+              <tr><td colspan="7" class="muted" style="text-align:center;padding:24px">暂无补丁</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
 
-      <!-- ================= TAB 3: 文档知识库 (Library) ================= -->
-      <section id="tab-library" class="tab-pane hidden flex-1 flex flex-col h-full p-6 overflow-y-auto custom-scrollbar space-y-6">
-        <!-- 头部 -->
-        <div class="flex items-center justify-between pb-4 border-b border-[var(--hairline)]">
+    <section id="tab-library" class="tab-pane hidden">
+      <div class="page custom-scrollbar">
+        <div class="page-head">
           <div>
-            <h2 class="text-xl font-serif-editorial font-bold text-[var(--ink)] flex items-center space-x-2">
-              <i class="fa-solid fa-book-bookmark text-[var(--ink)]"></i>
-              <span>权威文档知识库 (Local Library)</span>
-            </h2>
-            <p class="text-xs text-[var(--muted)] mt-1">支持 PDF, DOCX, PPTX, XLSX, TXT, MD, CSV, JSON 格式文档的清洗、SHA-256 去重与全文检索。</p>
+            <h2>知识库</h2>
+            <p>上传文档或直接录入文本，支持检索引用</p>
           </div>
-          <button onclick="loadLibrary()" class="rp-btn rp-btn-outline rp-btn-sm">
-            <i class="fa-solid fa-rotate text-xs"></i>
-            <span>刷新库</span>
-          </button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="loadLibrary()">刷新</button>
         </div>
-
-        <div class="grid grid-cols-3 gap-6">
-          <!-- 上传与录入面板 -->
-          <div class="space-y-4">
-            <!-- 文件拖拽上传 -->
-            <div
-              id="dropZone"
-              class="border-2 border-dashed border-[var(--hairline-strong)] hover:border-[var(--ink)] bg-white p-6 text-center cursor-pointer transition flex flex-col items-center justify-center space-y-2"
-              onclick="document.getElementById('fileUploadInput').click()"
-            >
+        <div class="grid-3">
+          <div class="stack">
+            <div id="dropZone" class="drop" onclick="document.getElementById('fileUploadInput').click()">
               <input type="file" id="fileUploadInput" class="hidden" onchange="handleFileUpload(event)" />
-              <div class="w-12 h-12 bg-[var(--cream-deep)] text-[var(--ink)] flex items-center justify-center text-xl">
-                <i class="fa-solid fa-cloud-arrow-up"></i>
-              </div>
-              <p class="text-sm font-medium text-[var(--ink)]">点击或拖拽文件上传</p>
-              <p class="text-xs text-[var(--muted)]">PDF, Word, PPT, Excel, Markdown, TXT 等</p>
+              <div>点击上传文件</div>
+              <div class="faint" style="margin-top:6px;font-size:12px">PDF / Word / PPT / Excel / Markdown / TXT</div>
             </div>
-
-            <!-- 文本录入 -->
-            <div class="rp-card p-4 space-y-3">
-              <h4 class="rp-eyebrow flex items-center space-x-1.5">
-                <i class="fa-solid fa-pen-nib"></i>
-                <span>直接录入文本片段</span>
-              </h4>
-              <input id="docTitleInput" type="text" placeholder="文档标题 (如: 运维手册.md)" class="rp-input" />
-              <textarea id="docContentInput" rows="4" placeholder="在此输入知识库文本内容..." class="rp-textarea custom-scrollbar"></textarea>
-              <button onclick="handleTextDocumentIngest()" class="rp-btn rp-btn-dark rp-btn-block">
-                录入知识库
-              </button>
+            <div class="stack">
+              <input id="docTitleInput" class="field" type="text" placeholder="标题，如 运维手册.md" />
+              <textarea id="docContentInput" class="field" placeholder="或在此粘贴文本…"></textarea>
+              <button type="button" class="btn btn-primary btn-block" onclick="handleTextDocumentIngest()">录入</button>
             </div>
           </div>
-
-          <!-- 文档索引列表与检索测试 -->
-          <div class="col-span-2 space-y-4">
-            <!-- 检索栏 -->
-            <div class="flex items-center space-x-2">
-              <div class="relative flex-1">
-                <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-[var(--muted)] text-xs"></i>
-                <input
-                  id="librarySearchInput"
-                  type="text"
-                  placeholder="输入关键字进行权威知识检索测试..."
-                  onkeyup="if(event.key==='Enter') searchLibrary()"
-                  class="rp-input pl-9 pr-4 py-2.5"
-                />
-              </div>
-              <button onclick="searchLibrary()" class="rp-btn rp-btn-dark rp-btn-sm py-2.5">
-                检索
-              </button>
-            </div>
-
-            <!-- 文档列表 -->
-            <div class="rp-card p-4 space-y-3">
-              <div class="flex items-center justify-between pb-2 border-b border-[var(--hairline)]">
-                <span class="text-xs font-bold text-[var(--ink)]">已索引文档列表</span>
-                <span id="docCountBadge" class="text-xs text-[var(--muted)]">共 0 篇</span>
-              </div>
-              <div id="documentList" class="space-y-2 max-h-[380px] overflow-y-auto custom-scrollbar">
-                <p class="text-xs text-[var(--muted)] text-center py-4">暂无文档记录</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ================= TAB 4: 用户记忆与画像 (Memory) ================= -->
-      <section id="tab-memory" class="tab-pane hidden flex-1 flex flex-col h-full p-6 overflow-y-auto custom-scrollbar space-y-6">
-        <!-- 头部 -->
-        <div class="flex items-center justify-between pb-4 border-b border-[var(--hairline)]">
           <div>
-            <h2 class="text-xl font-serif-editorial font-bold text-[var(--ink)] flex items-center space-x-2">
-              <i class="fa-solid fa-brain text-[var(--ink)]"></i>
-              <span>用户隔离记忆 & 认知画像 (Memory Runtime)</span>
-            </h2>
-            <p class="text-xs text-[var(--muted)] mt-1">记忆物理隔离。大五人格用于秘书督促（补短板、扬长处），不会让 Agent 用某种人格口吻说话。</p>
-          </div>
-          <button onclick="loadUserMemories(); loadPersonalityProfile()" class="rp-btn rp-btn-outline rp-btn-sm">
-            <i class="fa-solid fa-rotate text-xs"></i>
-            <span>刷新记忆</span>
-          </button>
-        </div>
-
-        <!-- 管理员全用户画像控制台 -->
-        <div id="adminPortraitPanel" class="hidden rp-panel p-4 space-y-3">
-          <div class="flex items-center justify-between">
-            <h3 class="text-sm font-serif-editorial font-bold text-[var(--ink)] flex items-center space-x-2">
-              <i class="fa-solid fa-user-shield"></i>
-              <span>全用户画像控制台（仅管理员）</span>
-            </h3>
-            <span id="adminUserCount" class="text-xs text-[var(--muted)]">0 名用户</span>
-          </div>
-          <div id="adminUserStatsGrid" class="grid grid-cols-3 gap-3"></div>
-        </div>
-
-        <!-- 搜索与当前用户概览 -->
-        <div class="flex items-center justify-between bg-white border border-[var(--hairline)] p-4">
-          <div class="flex items-center space-x-3">
-            <div class="w-10 h-10 bg-[var(--cream-deep)] text-[var(--ink)] flex items-center justify-center text-lg font-bold">
-              <i class="fa-solid fa-user-tag"></i>
+            <div class="search-row">
+              <input id="librarySearchInput" class="field" type="text" placeholder="检索知识库…" onkeyup="if(event.key==='Enter') searchLibrary()" />
+              <button type="button" class="btn btn-outline" onclick="searchLibrary()">检索</button>
             </div>
-            <div>
-              <h3 class="text-sm font-bold text-[var(--ink)] flex items-center space-x-2">
-                <span id="currentMemoryUser">alice</span>
-                <span class="text-[10px] px-2 py-0.5 bg-white text-[var(--muted)] border border-[var(--hairline-strong)] font-mono-label">隔离存储空间</span>
-              </h3>
-              <p class="text-xs text-[var(--muted)]">数据存储于 <code class="text-[var(--ink)] font-mono">data/users/<span id="currentMemoryUserPath">alice</span>/memory.sqlite3</code></p>
+            <div class="row-between" style="margin-bottom:10px">
+              <span class="mono">Documents</span>
+              <span id="docCountBadge" class="muted" style="font-size:12px">共 0 篇</span>
             </div>
-          </div>
-
-          <div class="flex items-center space-x-2">
-            <input
-              id="memoryQueryInput"
-              type="text"
-              placeholder="搜索当前用户记忆 (如: 咖啡)..."
-              onkeyup="if(event.key==='Enter') loadUserMemories()"
-              class="rp-input w-56"
-            />
-            <button onclick="loadUserMemories()" class="rp-btn rp-btn-outline rp-btn-sm py-2.5">
-              搜索
-            </button>
+            <div id="documentList" class="list"><p class="muted" style="text-align:center;padding:28px 0">暂无文档</p></div>
           </div>
         </div>
+      </div>
+    </section>
 
-        <!-- 大五人格秘书督促档案 -->
-        <div id="personalityPanel" class="rp-card p-4 space-y-4">
-          <div class="flex items-start justify-between gap-3">
-            <div>
-              <h3 class="text-sm font-serif-editorial font-bold text-[var(--ink)] flex items-center space-x-2">
-                <i class="fa-solid fa-user-check text-[var(--clay)]"></i>
-                <span>大五人格 · 秘书督促档案</span>
-              </h3>
-              <p id="personalityDisclaimer" class="text-[11px] text-[var(--muted)] mt-1">对话积累后生成估计，用于督促工作学习，不是心理诊断。</p>
-            </div>
-            <span id="personalityBackend" class="text-[10px] font-mono text-[var(--muted)]">未评估</span>
-          </div>
-          <div id="personalityTraitGrid" class="grid grid-cols-5 gap-2"></div>
-          <div class="grid grid-cols-2 gap-3 text-xs">
-            <div class="bg-[var(--cream-deep)] border border-[var(--hairline)] p-3 space-y-1">
-              <div class="text-[var(--muted)]">思维倾向</div>
-              <div id="personalityThinking" class="text-[var(--ink)] font-semibold">等待对话样本</div>
-              <p id="personalityThinkingNote" class="text-[var(--muted)] text-[11px] leading-relaxed"></p>
-            </div>
-            <div class="bg-[var(--cream-deep)] border border-[var(--hairline)] p-3 space-y-1">
-              <div class="text-[var(--muted)]">执行倾向</div>
-              <div id="personalityExecution" class="text-[var(--ink)] font-semibold">等待对话样本</div>
-              <p id="personalityExecutionNote" class="text-[var(--muted)] text-[11px] leading-relaxed"></p>
-            </div>
-          </div>
-          <div class="grid grid-cols-2 gap-3 text-xs">
-            <div>
-              <div class="text-[#3f7d4e] font-semibold mb-1">发扬长处</div>
-              <ul id="personalityStrengths" class="space-y-1 text-[var(--muted)]"></ul>
-            </div>
-            <div>
-              <div class="text-[var(--clay-deep)] font-semibold mb-1">需要弥补</div>
-              <ul id="personalityGaps" class="space-y-1 text-[var(--muted)]"></ul>
-            </div>
-          </div>
-          <div class="bg-white border border-[var(--hairline)] p-3 text-xs">
-            <div id="personalityHeadline" class="font-semibold text-[var(--ink)] mb-1">今日秘书重点</div>
-            <ul id="personalityFocus" class="space-y-1 text-[var(--muted)]"></ul>
-          </div>
-        </div>
-
-        <!-- 记忆列表卡片展示 -->
-        <div id="memoryCardGrid" class="grid grid-cols-2 gap-4">
-          <!-- 动态渲染卡片 -->
-        </div>
-      </section>
-
-      <!-- ================= TAB 5: 联网搜索 (Web) ================= -->
-      <section id="tab-web" class="tab-pane hidden flex-1 flex flex-col h-full p-6 overflow-y-auto custom-scrollbar space-y-6">
-        <div class="flex items-center justify-between pb-4 border-b border-[var(--hairline)]">
+    <section id="tab-memory" class="tab-pane hidden">
+      <div class="page custom-scrollbar">
+        <div class="page-head">
           <div>
-            <h2 class="text-xl font-serif-editorial font-bold text-[var(--ink)] flex items-center space-x-2">
-              <i class="fa-solid fa-globe text-[var(--ink)]"></i>
-              <span>联网搜索 (Web Runtime)</span>
-            </h2>
-            <p class="text-xs text-[var(--muted)] mt-1">多通道实时检索：searxng → Tavily → 新加坡中转自动故障转移，网页正文经 Jina Reader 读取。</p>
+            <h2>记忆</h2>
+            <p>用户隔离记忆与秘书督促档案</p>
           </div>
-          <span id="webEngineBadge" class="text-[10px] font-mono text-[var(--muted)]">未检索</span>
+          <button type="button" class="btn btn-outline btn-sm" onclick="loadUserMemories(); loadPersonalityProfile()">刷新</button>
         </div>
 
-        <div class="grid grid-cols-3 gap-6">
-          <!-- 左列：搜索 / 读网页录入 -->
-          <div class="space-y-4">
-            <div class="rp-card p-4 space-y-3">
-              <h4 class="rp-eyebrow flex items-center space-x-1.5">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <span>关键词搜索</span>
-              </h4>
-              <input id="webQueryInput" type="text" placeholder="如: 今天有什么大新闻 / DeepSeek 最新消息" onkeyup="if(event.key==='Enter') webSearch()" class="rp-input" />
-              <button onclick="webSearch()" class="rp-btn rp-btn-dark rp-btn-block">
-                联网检索
-              </button>
-            </div>
-
-            <div class="rp-card p-4 space-y-3">
-              <h4 class="rp-eyebrow flex items-center space-x-1.5">
-                <i class="fa-solid fa-file-invoice"></i>
-                <span>读取网页 / 链接</span>
-              </h4>
-              <input id="webUrlInput" type="text" placeholder="粘贴 http(s):// 链接..." onkeyup="if(event.key==='Enter') webFetch()" class="rp-input" />
-              <button onclick="webFetch()" class="rp-btn rp-btn-outline rp-btn-block">
-                读取网页正文
-              </button>
-            </div>
-
-            <div class="rp-panel p-3 text-[11px] text-[var(--muted)] space-y-1">
-              <div class="flex items-center space-x-1.5"><i class="fa-solid fa-circle-info text-[10px]"></i><span>对话中也可以直接问</span></div>
-              <p>在聊天里输入 <span class="text-[var(--clay-deep)] font-mono">!search 关键词</span> 或带网址的语句，Agent 会自动联网并基于结果回答。</p>
-            </div>
+        <div id="adminPortraitPanel" class="hidden" style="margin-bottom:20px;border:1px solid var(--hairline);padding:14px">
+          <div class="row-between" style="margin-bottom:10px">
+            <span class="serif" style="font-size:16px">全用户画像</span>
+            <span id="adminUserCount" class="muted" style="font-size:12px">0 名用户</span>
           </div>
+          <div id="adminUserStatsGrid" class="grid-2"></div>
+        </div>
 
-          <!-- 右列：结果展示 -->
-          <div class="col-span-2 space-y-4">
-            <div id="webResultList" class="space-y-2">
-              <p class="text-xs text-[var(--muted)] text-center py-10">输入关键词开始联网检索，结果将在此展示并附来源链接。</p>
-            </div>
+        <div class="row-between" style="margin-bottom:18px">
+          <div>
+            <div style="font-size:15px;font-weight:560"><span id="currentMemoryUser">alice</span></div>
+            <div class="faint" style="font-size:12px">data/users/<span id="currentMemoryUserPath">alice</span>/memory.sqlite3</div>
+          </div>
+          <div class="search-row" style="margin:0;min-width:320px">
+            <input id="memoryQueryInput" class="field" type="text" placeholder="搜索记忆…" onkeyup="if(event.key==='Enter') loadUserMemories()" />
+            <button type="button" class="btn btn-outline" onclick="loadUserMemories()">搜索</button>
           </div>
         </div>
-      </section>
 
-    </main>
-  </div>
-
-  <!-- 登录 / 注册浮层 -->
-  <div id="authOverlay" class="fixed inset-0 z-[80] bg-[var(--ink)]/90 flex items-center justify-center p-6">
-    <div class="w-full max-w-md bg-[var(--paper)] border border-[var(--hairline)] p-6 space-y-5">
-      <div class="text-center space-y-1">
-        <div class="w-12 h-12 mx-auto bg-[var(--ink)] flex items-center justify-center">
-          <i class="fa-solid fa-atom text-[var(--cream)] text-xl"></i>
+        <div id="personalityPanel" style="border:1px solid var(--hairline);padding:16px;margin-bottom:20px">
+          <div class="row-between" style="margin-bottom:12px">
+            <div>
+              <div class="serif" style="font-size:16px">大五人格 · 秘书档案</div>
+              <p id="personalityDisclaimer" class="muted" style="margin:4px 0 0;font-size:12px">对话积累后生成估计，不是心理诊断。</p>
+            </div>
+            <span id="personalityBackend" class="mono">未评估</span>
+          </div>
+          <div id="personalityTraitGrid" class="traits" style="margin-bottom:14px"></div>
+          <div class="grid-2" style="margin-bottom:12px">
+            <div>
+              <div class="muted" style="font-size:12px">思维倾向</div>
+              <div id="personalityThinking" style="font-weight:560;margin:4px 0">等待对话样本</div>
+              <p id="personalityThinkingNote" class="muted" style="font-size:12px;margin:0"></p>
+            </div>
+            <div>
+              <div class="muted" style="font-size:12px">执行倾向</div>
+              <div id="personalityExecution" style="font-weight:560;margin:4px 0">等待对话样本</div>
+              <p id="personalityExecutionNote" class="muted" style="font-size:12px;margin:0"></p>
+            </div>
+          </div>
+          <div class="grid-2" style="margin-bottom:12px">
+            <div>
+              <div style="font-size:12px;margin-bottom:4px">发扬长处</div>
+              <ul id="personalityStrengths" class="muted" style="margin:0;padding-left:16px;font-size:12px"></ul>
+            </div>
+            <div>
+              <div style="font-size:12px;margin-bottom:4px">需要弥补</div>
+              <ul id="personalityGaps" class="muted" style="margin:0;padding-left:16px;font-size:12px"></ul>
+            </div>
+          </div>
+          <div style="border-top:1px solid var(--hairline);padding-top:12px">
+            <div id="personalityHeadline" style="font-weight:560;margin-bottom:6px">今日秘书重点</div>
+            <ul id="personalityFocus" class="muted" style="margin:0;padding-left:16px;font-size:12px"></ul>
+          </div>
         </div>
-        <h2 class="text-lg font-serif-editorial font-bold text-[var(--ink)]">登录 MyAgent Unified</h2>
-        <p class="text-xs text-[var(--muted)]">记忆按用户物理隔离；仅管理员可查看全部画像</p>
+
+        <div id="memoryCardGrid" class="grid-2"></div>
       </div>
+    </section>
 
-      <div class="flex bg-[var(--cream-deep)] p-1 border border-[var(--hairline)] text-xs">
-        <button id="authTabLogin" onclick="setAuthMode('login')" class="flex-1 py-1.5 rp-btn-dark font-medium border-0">登录</button>
-        <button id="authTabRegister" onclick="setAuthMode('register')" class="flex-1 py-1.5 text-[var(--muted)] font-medium border-0 bg-transparent hover:bg-[var(--cream)]">注册</button>
+    <section id="tab-web" class="tab-pane hidden">
+      <div class="page custom-scrollbar">
+        <div class="page-head">
+          <div>
+            <h2>联网</h2>
+            <p>searxng → Tavily → 中转；网页正文经 Jina Reader</p>
+          </div>
+          <span id="webEngineBadge" class="mono">未检索</span>
+        </div>
+        <div class="grid-3">
+          <div class="stack">
+            <div class="stack">
+              <input id="webQueryInput" class="field" type="text" placeholder="搜索关键词…" onkeyup="if(event.key==='Enter') webSearch()" />
+              <button type="button" class="btn btn-primary btn-block" onclick="webSearch()">检索</button>
+            </div>
+            <div class="stack">
+              <input id="webUrlInput" class="field" type="text" placeholder="粘贴网页链接…" onkeyup="if(event.key==='Enter') webFetch()" />
+              <button type="button" class="btn btn-outline btn-block" onclick="webFetch()">读正文</button>
+            </div>
+            <p class="muted" style="font-size:12px;margin:0">对话里也可以直接 <code>!search …</code></p>
+          </div>
+          <div id="webResultList" class="list">
+            <p class="muted" style="text-align:center;padding:40px 0">结果会出现在这里</p>
+          </div>
+        </div>
       </div>
+    </section>
+  </main>
 
-      <form id="authForm" onsubmit="handleAuthSubmit(event)" class="space-y-3">
-        <input id="authUsername" type="text" placeholder="用户名（至少 3 位）" autocomplete="username" class="rp-input" />
-        <input id="authPassword" type="password" placeholder="密码（至少 6 位）" autocomplete="current-password" class="rp-input" />
-        <input id="authNickname" type="text" placeholder="昵称（可选）" class="hidden rp-input" />
-        <p id="authError" class="hidden text-xs text-[var(--danger)]"></p>
-        <button type="submit" id="authSubmitBtn" class="rp-btn rp-btn-dark rp-btn-block">登录</button>
+  <div id="authOverlay">
+    <div class="auth-card">
+      <h2>登录</h2>
+      <div class="sub">记忆按用户隔离；管理员可查看全部画像</div>
+      <div class="auth-tabs">
+        <button type="button" id="authTabLogin" class="auth-tab auth-tab-active" onclick="setAuthMode('login')">登录</button>
+        <button type="button" id="authTabRegister" class="auth-tab" onclick="setAuthMode('register')">注册</button>
+      </div>
+      <form id="authForm" class="auth-form" onsubmit="handleAuthSubmit(event)">
+        <input id="authUsername" class="field" type="text" placeholder="用户名（至少 3 位）" autocomplete="username" />
+        <input id="authPassword" class="field" type="password" placeholder="密码（至少 6 位）" autocomplete="current-password" />
+        <input id="authNickname" class="field hidden" type="text" placeholder="昵称（可选）" />
+        <p id="authError" class="auth-error hidden"></p>
+        <button type="submit" id="authSubmitBtn" class="btn btn-primary btn-block">登录</button>
       </form>
-
-      <div class="space-y-2">
-        <p class="text-[11px] text-[var(--muted)] text-center">测试账号一键填充</p>
-        <div class="grid grid-cols-2 gap-2">
-          <button onclick="fillDemoAccount('admin','admin123')" class="rp-btn rp-btn-outline text-xs">管理员 admin / admin123</button>
-          <button onclick="fillDemoAccount('alice','123456')" class="rp-btn rp-btn-outline text-xs">普通用户 alice / 123456</button>
-        </div>
+      <div class="demo">
+        <button type="button" onclick="fillDemoAccount('admin','admin123')">admin / admin123</button>
+        <button type="button" onclick="fillDemoAccount('alice','123456')">alice / 123456</button>
       </div>
     </div>
   </div>
 
-  <!-- JavaScript 交互驱动代码 -->
   <script>
-    // 全局状态管理
+﻿    // 全局状态管理
     const state = {
       activeTab: 'chat',
       userId: 'alice',
@@ -724,13 +491,13 @@
       const nick = document.getElementById('authNickname');
       const submit = document.getElementById('authSubmitBtn');
       if (mode === 'register') {
-        loginBtn.className = 'flex-1 py-1.5 text-[var(--muted)] font-medium border-0 bg-transparent hover:bg-[var(--cream)]';
-        registerBtn.className = 'flex-1 py-1.5 rp-btn-dark font-medium border-0';
+        loginBtn.className = 'auth-tab';
+        registerBtn.className = 'auth-tab auth-tab-active';
         nick.classList.remove('hidden');
         submit.innerText = '注册并登录';
       } else {
-        loginBtn.className = 'flex-1 py-1.5 rp-btn-dark font-medium border-0';
-        registerBtn.className = 'flex-1 py-1.5 text-[var(--muted)] font-medium border-0 bg-transparent hover:bg-[var(--cream)]';
+        loginBtn.className = 'auth-tab auth-tab-active';
+        registerBtn.className = 'auth-tab';
         nick.classList.add('hidden');
         submit.innerText = '登录';
       }
@@ -817,14 +584,14 @@
       const badge = document.getElementById('authRoleBadge');
       if (user.role === 'admin') {
         badge.innerText = '管理员';
-        badge.className = 'px-1.5 py-0.5 bg-[var(--clay)] text-white border border-[var(--clay)] font-mono-label';
+        badge.className = 'role-badge role-admin';
         document.getElementById('adminUserSwitcher').classList.remove('hidden');
         document.getElementById('adminUserSwitcher').classList.add('flex');
         document.getElementById('adminPortraitPanel').classList.remove('hidden');
         loadAdminUsers();
       } else {
         badge.innerText = '普通用户';
-        badge.className = 'px-1.5 py-0.5 bg-white text-[var(--muted)] border border-[var(--hairline-strong)] font-mono-label';
+        badge.className = 'role-badge';
         document.getElementById('adminUserSwitcher').classList.add('hidden');
         document.getElementById('adminUserSwitcher').classList.remove('flex');
         document.getElementById('adminPortraitPanel').classList.add('hidden');
@@ -882,7 +649,7 @@
         select.innerHTML = users.map(u => `<option value="${escapeHtml(u.username)}" ${u.username === state.userId ? 'selected' : ''}>${escapeHtml(u.nickname || u.username)} (${u.role})</option>`).join('');
         document.getElementById('adminUserStatsGrid').innerHTML = users.map(u => `
           <button onclick="inspectUser('${escapeHtml(u.username)}')" class="text-left bg-white border border-[var(--hairline)] hover:border-[var(--ink)] p-3 space-y-1 transition">
-            <div class="flex items-center justify-between text-xs">
+            <div class="flex items-center justify-between">
               <span class="text-[var(--ink)] font-medium">${escapeHtml(u.nickname || u.username)}</span>
               <span class="text-[10px] text-[var(--muted)]">${u.role}</span>
             </div>
@@ -931,18 +698,13 @@
     function switchTab(tabId) {
       state.activeTab = tabId;
       document.querySelectorAll('.tab-pane').forEach(el => el.classList.add('hidden'));
-      document.getElementById(`tab-${tabId}`).classList.remove('hidden');
-
-      // 更新按钮高亮
-      document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('tab-btn-active');
-      });
-      const activeBtn = document.getElementById(`tabBtn-${tabId}`);
-      activeBtn.classList.add('tab-btn-active');
-
+      document.getElementById('tab-' + tabId).classList.remove('hidden');
+      document.querySelectorAll('.nav-link').forEach(btn => btn.classList.remove('nav-link-active'));
+      const activeBtn = document.getElementById('tabBtn-' + tabId);
+      if (activeBtn) activeBtn.classList.add('nav-link-active');
       if (tabId === 'kanban') loadDashboard();
       if (tabId === 'library') loadLibrary();
-      if (tabId === 'web') { loadWebInfo(); }
+      if (tabId === 'web') loadWebInfo();
       if (tabId === 'memory') {
         if (state.currentUser && state.currentUser.role === 'admin') loadAdminUsers();
         loadUserMemories();
@@ -956,13 +718,13 @@
         const res = await fetch('/health');
         const data = await res.json();
         if (data.status === 'ok') {
-          document.getElementById('healthBadge').className = 'badge badge-ok';
-          document.getElementById('healthText').innerText = '系统正常';
+          document.getElementById('healthBadge').className = 'status-dot ok';
+          document.getElementById('healthText').innerText = '正常';
           document.getElementById('cogEngineName').innerText = data.cognitive_engine || 'PythonEngine';
         }
       } catch (err) {
-        document.getElementById('healthBadge').className = 'badge badge-err';
-        document.getElementById('healthText').innerText = '服务离线';
+        document.getElementById('healthBadge').className = 'status-dot err';
+        document.getElementById('healthText').innerText = '离线';
       }
     }
 
@@ -1054,19 +816,9 @@
     function appendUserMessage(text) {
       const container = document.getElementById('chatMessages');
       const div = document.createElement('div');
-      div.className = 'flex items-start justify-end space-x-3.5 max-w-3xl ml-auto';
+      div.className = 'msg-row msg-row-user';
       div.innerHTML = `
-        <div class="space-y-1 text-right">
-          <div class="bg-[var(--ink)] text-[var(--cream)] px-4 py-2.5 text-sm leading-relaxed">
-            ${escapeHtml(text)}
-          </div>
-          <div class="text-[11px] text-[var(--muted)]">
-            <span>${state.userId}</span> • <span>刚刚</span>
-          </div>
-        </div>
-        <div class="w-8 h-8 bg-[var(--cream-deep)] border border-[var(--hairline)] flex-shrink-0 flex items-center justify-center text-[var(--muted)] text-sm">
-          <i class="fa-solid fa-user"></i>
-        </div>
+        <div class="msg-user">${escapeHtml(text)}</div>
       `;
       container.appendChild(div);
       container.scrollTop = container.scrollHeight;
@@ -1076,19 +828,13 @@
       const container = document.getElementById('chatMessages');
       const div = document.createElement('div');
       div.id = msgId;
-      div.className = 'flex items-start space-x-3.5 max-w-3xl';
+      div.className = 'msg-row';
       div.innerHTML = `
-        <div class="w-8 h-8 bg-[var(--ink)] flex-shrink-0 flex items-center justify-center text-[var(--cream)] text-sm">
-          <i class="fa-solid fa-robot"></i>
-        </div>
-        <div class="space-y-3 flex-1">
-          <div class="agent-content bg-white border border-[var(--hairline)] px-4 py-3 text-[var(--ink)] text-sm prose leading-relaxed">
-            <div class="flex items-center space-x-2 text-[var(--muted)]">
-              <i class="fa-solid fa-circle-notch animate-spin text-xs"></i>
-              <span>正在思考与处理...</span>
-            </div>
+        <div class="msg-agent">
+          <div class="agent-content prose">
+            <span class="thinking">思考中…</span>
           </div>
-          <div class="agent-extras space-y-2"></div>
+          <div class="agent-extras"></div>
         </div>
       `;
       container.appendChild(div);
@@ -1113,11 +859,10 @@
           if (secEvent.type === 'reality_patch') {
             const patch = secEvent.data;
             const card = document.createElement('div');
-            card.className = 'rp-card p-3.5 text-xs space-y-2 border-l-4 border-l-[var(--clay)]';
+            card.className = 'soft-card';
             card.innerHTML = `
               <div class="flex items-center justify-between font-semibold">
                 <span class="flex items-center space-x-1.5">
-                  <i class="fa-solid fa-shield-halved text-[var(--clay)]"></i>
                   <span>待确认现实补丁: ${patch.id}</span>
                 </span>
                 <span class="px-2 py-0.5 bg-[var(--cream-deep)] text-[var(--muted)] border border-[var(--hairline)] font-mono">${patch.operation} ${patch.target_type}</span>
@@ -1125,7 +870,7 @@
               <p class="text-[var(--muted)]">提议变更: <strong class="text-[var(--ink)]">${escapeHtml(patch.proposed_change)}</strong></p>
               <div class="flex items-center justify-end space-x-2 pt-1">
                 <button onclick="confirmPatch('${patch.id}')" class="rp-btn rp-btn-dark rp-btn-sm">
-                  <i class="fa-solid fa-check mr-1"></i> 确认并应用补丁
+                  确认并应用补丁
                 </button>
               </div>
             `;
@@ -1133,10 +878,10 @@
           } else if (secEvent.type === 'sync_draft') {
             const draft = secEvent.data;
             const card = document.createElement('div');
-            card.className = 'rp-card p-3.5 text-xs space-y-2 text-[var(--muted)]';
+            card.className = 'soft-card';
             card.innerHTML = `
               <div class="flex items-center justify-between font-semibold text-[var(--ink)]">
-                <span><i class="fa-solid fa-list-check text-[var(--ink)] mr-1.5"></i> 同步草稿已生成 (${draft.session_id})</span>
+                <span>同步草稿已生成 (${draft.session_id})</span>
                 <button onclick="confirmSync('${draft.session_id}')" class="rp-btn rp-btn-outline rp-btn-sm">一键确认同步</button>
               </div>
               <p>${draft.draft.tasks.length} 项任务提议待确认</p>
@@ -1149,10 +894,9 @@
       // 2. 渲染权威引用 (Citations)
       if (data.citations && data.citations.length > 0) {
         const citeBox = document.createElement('div');
-        citeBox.className = 'bg-[var(--cream-deep)] border border-[var(--hairline)] p-3 text-xs space-y-1.5';
+        citeBox.className = 'soft-card';
         citeBox.innerHTML = `
           <div class="font-semibold text-[var(--muted)] flex items-center space-x-1.5">
-            <i class="fa-solid fa-bookmark text-[var(--ink)]"></i>
             <span>参考知识库来源 (${data.citations.length})</span>
           </div>
         `;
@@ -1163,8 +907,8 @@
           citeBox.innerHTML += `
             <div class="pl-3 border-l-2 border-[var(--hairline-strong)] py-0.5">
               ${titleHtml}
-              <span class="text-[var(--muted)] text-[11px] ml-1">(${escapeHtml(c.source)})</span>
-              <p class="text-[var(--muted)] text-[11px] mt-0.5 line-clamp-2">${escapeHtml(c.snippet)}</p>
+              <span class="text-[var(--muted)] ml-1">(${escapeHtml(c.source)})</span>
+              <p class="text-[var(--muted)] mt-0.5 line-clamp-2">${escapeHtml(c.snippet)}</p>
             </div>
           `;
         });
@@ -1175,13 +919,12 @@
       if (data.tips && data.tips.length > 0) {
         data.tips.forEach(tip => {
           const tipCard = document.createElement('div');
-          tipCard.className = 'bg-white border border-[var(--hairline)] border-l-4 border-l-[var(--clay)] p-3 text-xs text-[var(--ink)] flex items-start space-x-2.5';
+          tipCard.className = 'soft-card tip-card';
           tipCard.innerHTML = `
-            <i class="fa-regular fa-lightbulb text-[var(--clay)] text-sm mt-0.5"></i>
             <div class="space-y-0.5 flex-1">
               <div class="font-bold">${escapeHtml(tip.title)}</div>
               <p class="text-[var(--muted)]">${escapeHtml(tip.message)}</p>
-              ${tip.alternative_angle ? `<p class="text-[var(--clay-deep)] italic text-[11px]">建议角度: ${escapeHtml(tip.alternative_angle)}</p>` : ''}
+              ${tip.alternative_angle ? `<p class="text-[var(--clay-deep)] italic">建议角度: ${escapeHtml(tip.alternative_angle)}</p>` : ''}
             </div>
           `;
           extrasBox.appendChild(tipCard);
@@ -1193,7 +936,6 @@
         const memEventDiv = document.createElement('div');
         memEventDiv.className = 'text-[11px] text-[var(--muted)] flex items-center space-x-2';
         memEventDiv.innerHTML = `
-          <i class="fa-solid fa-sparkles text-[var(--clay)]"></i>
           <span>萃取长期记忆: ${data.memory_events.map(m => `[${m.category}] ${escapeHtml(m.content)}`).join(', ')}</span>
         `;
         extrasBox.appendChild(memEventDiv);
@@ -1207,7 +949,7 @@
       const el = document.getElementById(msgId);
       if (!el) return;
       const contentBox = el.querySelector('.agent-content');
-      contentBox.innerHTML = `<span class="text-[var(--danger)]"><i class="fa-solid fa-triangle-exclamation mr-1.5"></i> 处理失败: ${escapeHtml(errMsg)}</span>`;
+      contentBox.innerHTML = `<span class="text-[var(--danger)]">处理失败: ${escapeHtml(errMsg)}</span>`;
     }
 
     // ================= 看板与补丁模块 (Kanban & Patches) =================
@@ -1246,9 +988,9 @@
           tasks.forEach(task => {
             const lane = lanes[task.status] || lanes.todo;
             const card = document.createElement('div');
-            card.className = 'lane-card text-xs hover:border-[var(--hairline-strong)] transition';
+            card.className = 'lane-card';
             card.innerHTML = `
-              <div class="flex items-center justify-between text-[var(--muted)] text-[11px]">
+              <div class="flex items-center justify-between text-[var(--muted)]">
                 <span class="font-mono">${task.id}</span>
                 <span>${task.owner || '未指派'}</span>
               </div>
@@ -1375,16 +1117,15 @@
         }
 
         listEl.innerHTML = docs.map(doc => `
-          <div class="rp-card p-3 space-y-1 text-xs hover:border-[var(--hairline-strong)] transition">
+          <div class="doc">
             <div class="flex items-center justify-between">
               <span class="font-bold text-[var(--ink)] flex items-center space-x-1.5">
-                <i class="fa-regular fa-file-lines text-[var(--clay)]"></i>
                 <span>${escapeHtml(doc.title)}</span>
               </span>
-              <span class="px-2 py-0.5 bg-[var(--cream-deep)] text-[var(--muted)] border border-[var(--hairline)] text-[10px] font-mono-label">${doc.source || 'upload'}</span>
+              <span class="px-2 py-0.5 bg-[var(--cream-deep)] text-[var(--muted)] border border-[var(--hairline)] mono">${doc.source || 'upload'}</span>
             </div>
-            <p class="text-[var(--muted)] text-[11px] line-clamp-2">${escapeHtml(doc.content || '')}</p>
-            <div class="flex items-center justify-between text-[10px] text-[var(--faint)] pt-1 font-mono">
+            <p class="text-[var(--muted)] line-clamp-2">${escapeHtml(doc.content || '')}</p>
+            <div class="flex items-center justify-between text-[var(--faint)] pt-1 font-mono">
               <span>SHA256: ${doc.content_hash ? doc.content_hash.substring(0, 16) + '...' : ''}</span>
               <span>字数: ${doc.char_count || 0}</span>
             </div>
@@ -1466,12 +1207,12 @@
         listEl.innerHTML = `
           <div class="text-xs text-[var(--ink)] font-semibold mb-2">命中检索结果 (${results.length} 条):</div>
           ${results.map(r => `
-            <div class="rp-card border-l-4 border-l-[var(--clay)] p-3 space-y-1 text-xs">
+            <div class="doc">
               <div class="flex items-center justify-between">
                 <span class="font-bold text-[var(--ink)]">[${escapeHtml(r.title)}]</span>
                 <span class="text-[10px] text-[var(--muted)]">匹配得分: ${r.score || 0}</span>
               </div>
-              <p class="text-[var(--muted)] text-[11px]">${escapeHtml(r.snippet)}</p>
+              <p class="text-[var(--muted)]">${escapeHtml(r.snippet)}</p>
             </div>
           `).join('')}
         `;
@@ -1498,7 +1239,7 @@
       const query = document.getElementById('webQueryInput').value.trim();
       if (!query) { alert('请输入搜索关键词'); return; }
       const listEl = document.getElementById('webResultList');
-      listEl.innerHTML = `<p class="text-xs text-[var(--muted)] text-center py-8"><i class="fa-solid fa-circle-notch animate-spin"></i> 正在联网检索「${escapeHtml(query)}」...</p>`;
+      listEl.innerHTML = `<p class="text-xs text-[var(--muted)] text-center py-8">正在联网检索「${escapeHtml(query)}」...</p>`;
       try {
         const resp = await fetch('/v1/web/search', {
           method: 'POST',
@@ -1509,7 +1250,7 @@
         document.getElementById('webEngineBadge').innerText = `通道: ${data.channel || 'none'}`;
         const results = data.results || [];
         if (data.error && results.length === 0) {
-          listEl.innerHTML = `<p class="text-xs text-[var(--danger)] text-center py-8"><i class="fa-solid fa-triangle-exclamation mr-1.5"></i>检索失败: ${escapeHtml(data.error)}</p>`;
+          listEl.innerHTML = `<p class="text-xs text-[var(--danger)] text-center py-8">检索失败: ${escapeHtml(data.error)}</p>`;
           return;
         }
         if (results.length === 0) {
@@ -1517,21 +1258,20 @@
           return;
         }
         listEl.innerHTML = `
-          ${data.answer ? `<div class="rp-card border-l-4 border-l-[var(--clay)] p-3.5 text-xs space-y-1">
-            <div class="font-bold text-[var(--ink)]"><i class="fa-solid fa-wand-magic-sparkles mr-1 text-[var(--clay)]"></i>AI 综合摘要</div>
+          ${data.answer ? `<div class="soft-card">
+            <div class="font-bold text-[var(--ink)]">AI 综合摘要</div>
             <p class="text-[var(--muted)] leading-relaxed">${escapeHtml(data.answer)}</p>
           </div>` : ''}
           ${results.map((r, i) => `
-            <div class="rp-card p-3.5 space-y-1.5 text-xs hover:border-[var(--hairline-strong)] transition">
+            <div class="web-item">
               <div class="flex items-center justify-between">
                 <span class="font-bold text-[var(--ink)] flex items-center space-x-1.5">
-                  <i class="fa-solid fa-globe text-[10px] text-[var(--clay)]"></i>
                   <a href="${escapeHtml(r.url)}" target="_blank" rel="noopener" class="hover:text-[var(--clay-deep)] hover:underline truncate">${escapeHtml(r.title) || escapeHtml(r.url)}</a>
                 </span>
-                <span class="px-2 py-0.5 bg-[var(--cream-deep)] text-[var(--muted)] border border-[var(--hairline)] text-[10px] flex-shrink-0 font-mono-label">${i + 1}. ${escapeHtml(r.source || 'web')}</span>
+                <span class="px-2 py-0.5 bg-[var(--cream-deep)] text-[var(--muted)] border border-[var(--hairline)] flex-shrink-0 mono">${i + 1}. ${escapeHtml(r.source || 'web')}</span>
               </div>
-              <p class="text-[var(--muted)] text-[11px] leading-relaxed">${escapeHtml(r.snippet || r.content || '')}</p>
-              <div class="flex items-center justify-between text-[10px] text-[var(--faint)] font-mono">
+              <p class="text-[var(--muted)] leading-relaxed">${escapeHtml(r.snippet || r.content || '')}</p>
+              <div class="flex items-center justify-between text-[var(--faint)] font-mono">
                 <span class="truncate">${escapeHtml(r.url)}</span>
                 <button onclick="webFetchUrl('${escapeHtml(r.url)}')" class="ml-2 rp-btn rp-btn-outline rp-btn-sm flex-shrink-0">读正文</button>
               </div>
@@ -1551,7 +1291,7 @@
     async function webFetchUrl(url) {
       if (!url) { alert('请输入网页链接'); return; }
       const listEl = document.getElementById('webResultList');
-      listEl.innerHTML = `<p class="text-xs text-[var(--muted)] text-center py-8"><i class="fa-solid fa-circle-notch animate-spin"></i> 正在读取 ${escapeHtml(url)} ...</p>`;
+      listEl.innerHTML = `<p class="text-xs text-[var(--muted)] text-center py-8">正在读取 ${escapeHtml(url)} ...</p>`;
       try {
         const resp = await fetch('/v1/web/fetch', {
           method: 'POST',
@@ -1566,12 +1306,12 @@
         }
         document.getElementById('webEngineBadge').innerText = `via: ${data.via || 'jina-direct'}`;
         listEl.innerHTML = `
-          <div class="rp-card p-4 space-y-2 text-xs">
+          <div class="web-item">
             <div class="flex items-center justify-between">
               <a href="${escapeHtml(url)}" target="_blank" rel="noopener" class="font-bold text-[var(--clay-deep)] hover:underline truncate">${escapeHtml(url)}</a>
-              <span class="px-2 py-0.5 bg-[var(--cream-deep)] text-[var(--muted)] border border-[var(--hairline)] text-[10px] flex-shrink-0 font-mono-label">正文 ${content.length} 字</span>
+              <span class="px-2 py-0.5 bg-[var(--cream-deep)] text-[var(--muted)] border border-[var(--hairline)] flex-shrink-0 mono">正文 ${content.length} 字</span>
             </div>
-            <pre class="whitespace-pre-wrap text-[var(--ink)] leading-relaxed text-[11px] max-h-[520px] overflow-y-auto custom-scrollbar">${escapeHtml(content)}</pre>
+            <pre class="whitespace-pre-wrap text-[var(--ink)] leading-relaxed max-h-[520px] overflow-y-auto custom-scrollbar">${escapeHtml(content)}</pre>
           </div>
         `;
       } catch (err) {
@@ -1599,12 +1339,12 @@
         grid.innerHTML = (data.traits || []).map(trait => {
           const pct = Math.round((trait.score || 0) * 100);
           return `
-            <div class="bg-white border border-[var(--hairline)] p-2.5 space-y-1.5">
+            <div class="trait">
               <div class="text-[11px] text-[var(--ink)] font-semibold">${escapeHtml(trait.zh)}</div>
-              <div class="rp-bar">
+              <div class="bar">
                 <div style="width:${pct}%"></div>
               </div>
-              <div class="flex items-center justify-between text-[10px] text-[var(--muted)]">
+              <div class="flex items-center justify-between text-[var(--muted)]">
                 <span>${escapeHtml(trait.en)}</span>
                 <span class="font-mono text-[var(--ink)]">${pct}%</span>
               </div>
@@ -1635,25 +1375,24 @@
           return;
         }
         if (resp.status === 403) {
-          document.getElementById('memoryCardGrid').innerHTML = `<div class="col-span-2 text-center py-12 text-[var(--danger)] text-xs">${escapeHtml(data.error || '无权查看其他用户的记忆画像')}</div>`;
+          document.getElementById('memoryCardGrid').innerHTML = `<div class="col-span-2 text-center py-12 text-[var(--danger)]">${escapeHtml(data.error || '无权查看其他用户的记忆画像')}</div>`;
           return;
         }
         const memories = data.memories || [];
 
         const grid = document.getElementById('memoryCardGrid');
         if (memories.length === 0) {
-          grid.innerHTML = `<div class="col-span-2 text-center py-12 text-[var(--muted)] text-xs">当前用户暂无${q ? '匹配' : ''}画像记忆</div>`;
+          grid.innerHTML = `<div class="col-span-2 text-center py-12 text-[var(--muted)]">当前用户暂无${q ? '匹配' : ''}画像记忆</div>`;
           return;
         }
 
         grid.innerHTML = memories.map(mem => `
-          <div class="rp-card p-4 space-y-3 hover:border-[var(--hairline-strong)] transition">
+          <div class="mem">
             <div class="flex items-center justify-between">
-              <span class="px-2.5 py-0.5 text-[11px] font-medium bg-[var(--cream-deep)] text-[var(--ink)] border border-[var(--hairline)] font-mono-label">
+              <span class="px-2.5 py-0.5 font-medium bg-[var(--cream-deep)] text-[var(--ink)] border border-[var(--hairline)] mono">
                 ${mem.category}
               </span>
-              <div class="flex items-center space-x-1 text-xs text-[var(--clay-deep)]">
-                <i class="fa-solid fa-star text-[10px]"></i>
+              <div class="flex items-center space-x-1 text-[var(--clay-deep)]">
                 <span class="font-mono font-bold">${(mem.confidence * 100).toFixed(0)}%</span>
               </div>
             </div>
@@ -1661,18 +1400,15 @@
               <p class="text-sm font-semibold text-[var(--ink)]">${escapeHtml(mem.content)}</p>
               <p class="text-xs text-[var(--muted)] mt-1 italic">证据: "${escapeHtml(mem.evidence || '')}"</p>
             </div>
-            <div class="flex items-center justify-between pt-2 border-t border-[var(--hairline)] text-xs">
-              <span class="text-[var(--faint)] text-[10px]">出现次数: ${mem.occurrence_count} 次</span>
+            <div class="flex items-center justify-between pt-2 border-t border-[var(--hairline)]">
+              <span class="text-[var(--faint)]">出现次数: ${mem.occurrence_count} 次</span>
               <div class="flex items-center space-x-1.5">
                 <button onclick="applyFeedback('${mem.id}', 'confirm')" title="确认增强置信度" class="rp-btn rp-btn-outline rp-btn-sm hover:border-[#3f7d4e] hover:text-[#3f7d4e]">
-                  <i class="fa-solid fa-thumbs-up"></i>
-                </button>
+                  </button>
                 <button onclick="applyFeedback('${mem.id}', 'reject')" title="拒绝标记为无效" class="rp-btn rp-btn-outline rp-btn-sm hover:border-[var(--danger)] hover:text-[var(--danger)]">
-                  <i class="fa-solid fa-thumbs-down"></i>
-                </button>
+                  </button>
                 <button onclick="forgetMemory('${mem.id}')" title="彻底遗忘并抹除证据链" class="rp-btn rp-btn-danger rp-btn-sm">
-                  <i class="fa-solid fa-trash-can"></i>
-                </button>
+                  </button>
               </div>
             </div>
           </div>
@@ -1732,6 +1468,8 @@
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
     }
+  
+
   </script>
 </body>
 </html>
