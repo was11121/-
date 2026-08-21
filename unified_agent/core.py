@@ -9,11 +9,12 @@ from typing import Callable
 from cognitive_engine import load_cognitive_engine
 from library_runtime import LocalLibrary
 from memory_runtime import MemoryService
+from personality_runtime import PersonalityService
 from secretary_runtime import SecretaryService
 from tip_engine import TipEngine
 
 from .llm import create_llm_responder
-from .protocol import Citation, InteractionEnvelope, MemoryEvent, ResponseEnvelope
+from .protocol import Citation, InteractionEnvelope, MemoryEvent, ResponseEnvelope, Tip
 
 
 Responder = Callable[[str, str, str], str]
@@ -32,6 +33,7 @@ class UnifiedAgent:
         self.memory = MemoryService(data_dir)
         self.library = LocalLibrary(data_dir)
         self.secretary = SecretaryService(data_dir)
+        self.personality = PersonalityService(data_dir)
         self.tips = TipEngine()
         self.cognitive = load_cognitive_engine()
         self.responder = responder or create_llm_responder(fallback_responder=_fallback_responder)
@@ -40,6 +42,9 @@ class UnifiedAgent:
         if not interaction.message:
             raise ValueError("message is required")
         user_context = self.memory.build_user_context(interaction.user_id, interaction.message)
+        personality_profile = self.personality.observe(interaction.user_id, interaction.message)
+        if personality_profile.get("prompt_block"):
+            user_context = (user_context + "\n\n" if user_context else "") + personality_profile["prompt_block"]
         library_results = []
         if self._looks_like_library_request(interaction.message):
             library_results = self.library.search_library(interaction.message, limit=5)
@@ -61,8 +66,37 @@ class UnifiedAgent:
         memory_result = self.memory.record_interaction(interaction.user_id, interaction.message, content, source=interaction.channel)
         memory_events = [MemoryEvent("stored", item.get("id"), item.get("content", ""), float(item.get("confidence", 0)), item.get("category", "")) for item in memory_result.get("stored", [])]
         tip_list = self.tips.evaluate(interaction.user_id, interaction.message, self.memory.recent_interactions(interaction.user_id), risks=[])
+        for item in self.personality.coaching_tips(personality_profile):
+            tip_list.append(Tip(
+                tip_id="tip_coach_" + uuid.uuid4().hex[:8],
+                type=item["type"],
+                title=item["title"],
+                message=item["message"],
+                alternative_angle=item.get("alternative_angle") or "",
+                confidence=float(item.get("confidence") or 0.7),
+                cooldown_seconds=300,
+            ))
         citations = [Citation(item["document_id"], item["title"], item["source"], item.get("locator", ""), item.get("snippet", "")) for item in library_results]
-        return ResponseEnvelope(content=content, citations=citations, memory_events=memory_events, secretary_events=secretary_events, tips=tip_list, requires_confirmation=requires_confirmation, audit_id="A-" + uuid.uuid4().hex[:10])
+        return ResponseEnvelope(
+            content=content,
+            citations=citations,
+            memory_events=memory_events,
+            secretary_events=secretary_events,
+            tips=tip_list,
+            requires_confirmation=requires_confirmation,
+            audit_id="A-" + uuid.uuid4().hex[:10],
+            metadata={"personality": {
+                "scores": personality_profile.get("scores"),
+                "work_style": personality_profile.get("work_style"),
+                "playbook": {
+                    "headline": (personality_profile.get("playbook") or {}).get("headline"),
+                    "today_focus": (personality_profile.get("playbook") or {}).get("today_focus"),
+                    "gaps": (personality_profile.get("playbook") or {}).get("gaps"),
+                    "strengths": (personality_profile.get("playbook") or {}).get("strengths"),
+                },
+                "model": personality_profile.get("model"),
+            }},
+        )
 
     def record_interaction(self, user_id: str, message: str, reply: str, source: str = "chat") -> dict:
         return self.memory.record_interaction(user_id, message, reply, source=source)
@@ -72,6 +106,9 @@ class UnifiedAgent:
 
     def get_user_profile_stats(self, user_id: str) -> dict:
         return self.memory.get_user_profile_stats(user_id)
+
+    def get_personality_profile(self, user_id: str) -> dict:
+        return self.personality.get_profile(user_id)
 
     def apply_feedback(self, user_id: str, feedback_type: str, memory_id: str | None = None, content: str = "") -> dict:
         result = self.memory.apply_feedback(user_id, feedback_type, memory_id, content)

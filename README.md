@@ -23,6 +23,7 @@ python app.py
 - `unified_agent/`：协议、统一 Agent Core 和响应提供器
 - `auth_runtime/`：登录注册、Bearer Token、角色权限（admin / user）
 - `memory_runtime/`：用户分区、反馈记忆、画像上下文
+- `personality_runtime/`：大五人格识别与秘书督促策略（补短板、扬长处）
 - `library_runtime/`：文档解析、净化、索引、检索和引用
 - `secretary_runtime/`：项目秘书、现实补丁、审计和回滚
 - `tip_engine/`：换角度提示检测与冷却
@@ -55,3 +56,12 @@ python app.py
 - 普通用户 `alice` / `123456`、`bob` / `123456`：仅可使用助手功能并访问自身记忆
 
 请求头使用 `Authorization: Bearer <token>`。普通用户访问他人记忆或 `/v1/admin/*` 会返回 `403`。接口细节见 `API.md` 第 3.16、3.17 节。
+
+## 大五人格与秘书督促
+
+系统会从对话中估计大五人格（开放性、尽责性、外向性、宜人性、神经质），再映射为：
+- 更偏理性还是感性
+- 执行力强还是容易拖延
+- 今天该督促什么、该发挥什么长处
+
+这不是让 Agent 用某种人格说话，也不是心理诊断。优先使用 Hugging Face 上的 `Minej/bert-base-personality`；未安装 `torch`/`transformers` 时自动用中文启发式。可在 `.env` 设置 `PERSONALITY_DISABLE_BERT=1` 强制跳过模型下载。

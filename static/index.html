@@ -410,9 +410,9 @@
               <i class="fa-solid fa-brain text-indigo-400"></i>
               <span>用户隔离记忆 & 认知画像 (Memory Runtime)</span>
             </h2>
-            <p class="text-xs text-slate-400 mt-1">基于 SQLite 物理隔离的用户长期记忆系统。普通用户仅可查看自身画像；管理员可穿透查看全部用户。</p>
+            <p class="text-xs text-slate-400 mt-1">记忆物理隔离。大五人格用于秘书督促（补短板、扬长处），不会让 Agent 用某种人格口吻说话。</p>
           </div>
-          <button onclick="loadUserMemories()" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center space-x-1.5 transition border border-slate-700">
+          <button onclick="loadUserMemories(); loadPersonalityProfile()" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center space-x-1.5 transition border border-slate-700">
             <i class="fa-solid fa-rotate text-xs"></i>
             <span>刷新记忆</span>
           </button>
@@ -456,6 +456,47 @@
             <button onclick="loadUserMemories()" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition">
               搜索
             </button>
+          </div>
+        </div>
+
+        <!-- 大五人格秘书督促档案 -->
+        <div id="personalityPanel" class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-4">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+                <i class="fa-solid fa-user-check text-cyan-400"></i>
+                <span>大五人格 · 秘书督促档案</span>
+              </h3>
+              <p id="personalityDisclaimer" class="text-[11px] text-slate-500 mt-1">对话积累后生成估计，用于督促工作学习，不是心理诊断。</p>
+            </div>
+            <span id="personalityBackend" class="text-[10px] font-mono text-slate-500">未评估</span>
+          </div>
+          <div id="personalityTraitGrid" class="grid grid-cols-5 gap-2"></div>
+          <div class="grid grid-cols-2 gap-3 text-xs">
+            <div class="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-1">
+              <div class="text-slate-400">思维倾向</div>
+              <div id="personalityThinking" class="text-slate-100 font-semibold">等待对话样本</div>
+              <p id="personalityThinkingNote" class="text-slate-500 text-[11px] leading-relaxed"></p>
+            </div>
+            <div class="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-1">
+              <div class="text-slate-400">执行倾向</div>
+              <div id="personalityExecution" class="text-slate-100 font-semibold">等待对话样本</div>
+              <p id="personalityExecutionNote" class="text-slate-500 text-[11px] leading-relaxed"></p>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3 text-xs">
+            <div>
+              <div class="text-emerald-300/90 font-semibold mb-1">发扬长处</div>
+              <ul id="personalityStrengths" class="space-y-1 text-slate-400"></ul>
+            </div>
+            <div>
+              <div class="text-amber-300/90 font-semibold mb-1">需要弥补</div>
+              <ul id="personalityGaps" class="space-y-1 text-slate-400"></ul>
+            </div>
+          </div>
+          <div class="bg-cyan-950/30 border border-cyan-500/20 rounded-lg p-3 text-xs">
+            <div id="personalityHeadline" class="font-semibold text-cyan-200 mb-1">今日秘书重点</div>
+            <ul id="personalityFocus" class="space-y-1 text-slate-300"></ul>
           </div>
         </div>
 
@@ -635,6 +676,7 @@
       }
       document.getElementById('currentMemoryUser').innerText = state.userId;
       document.getElementById('currentMemoryUserPath').innerText = state.userId;
+      loadPersonalityProfile();
     }
 
     function clearSession() {
@@ -709,6 +751,7 @@
       const select = document.getElementById('adminTargetSelect');
       if (select) select.value = username;
       loadUserMemories();
+      loadPersonalityProfile();
     }
 
     // 初始化运行
@@ -749,6 +792,7 @@
       if (tabId === 'memory') {
         if (state.currentUser && state.currentUser.role === 'admin') loadAdminUsers();
         loadUserMemories();
+        loadPersonalityProfile();
       }
     }
 
@@ -1280,6 +1324,51 @@
     }
 
     // ================= 记忆与认知画像模块 (Memory) =================
+    async function loadPersonalityProfile() {
+      try {
+        const resp = await fetch(`/v1/users/${encodeURIComponent(state.userId)}/personality`, { headers: authHeaders() });
+        const data = await resp.json();
+        if (resp.status === 401) {
+          clearSession();
+          return;
+        }
+        if (resp.status === 403) {
+          document.getElementById('personalityDisclaimer').innerText = data.error || '无权查看';
+          return;
+        }
+        const model = data.model || {};
+        document.getElementById('personalityBackend').innerText = (model.backend || 'heuristic') + (data.samples ? ` · ${data.samples} 条样本` : '');
+        document.getElementById('personalityDisclaimer').innerText = model.disclaimer || '';
+        const grid = document.getElementById('personalityTraitGrid');
+        grid.innerHTML = (data.traits || []).map(trait => {
+          const pct = Math.round((trait.score || 0) * 100);
+          return `
+            <div class="bg-slate-950 border border-slate-800 rounded-lg p-2.5 space-y-1.5">
+              <div class="text-[11px] text-slate-300 font-semibold">${escapeHtml(trait.zh)}</div>
+              <div class="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                <div class="h-full bg-cyan-400" style="width:${pct}%"></div>
+              </div>
+              <div class="flex items-center justify-between text-[10px] text-slate-500">
+                <span>${escapeHtml(trait.en)}</span>
+                <span class="font-mono text-slate-300">${pct}%</span>
+              </div>
+            </div>`;
+        }).join('');
+        const work = data.work_style || {};
+        document.getElementById('personalityThinking').innerText = work.thinking_label || '样本不足';
+        document.getElementById('personalityThinkingNote').innerText = work.thinking_note || '';
+        document.getElementById('personalityExecution').innerText = work.execution_label || '样本不足';
+        document.getElementById('personalityExecutionNote').innerText = work.execution_note || '';
+        const play = data.playbook || {};
+        document.getElementById('personalityHeadline').innerText = play.headline || '今日秘书重点';
+        document.getElementById('personalityStrengths').innerHTML = (play.strengths || ['对话后再评估长处']).map(item => `<li>• ${escapeHtml(item)}</li>`).join('');
+        document.getElementById('personalityGaps').innerHTML = (play.gaps || ['对话后再评估短板']).map(item => `<li>• ${escapeHtml(item)}</li>`).join('');
+        document.getElementById('personalityFocus').innerHTML = (play.today_focus || []).map(item => `<li>• ${escapeHtml(item)}</li>`).join('');
+      } catch (err) {
+        console.error('Load personality failed:', err);
+      }
+    }
+
     async function loadUserMemories() {
       const q = document.getElementById('memoryQueryInput').value.trim();
       try {

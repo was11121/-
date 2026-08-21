@@ -79,6 +79,7 @@ def health():
         "memory": "local-isolated",
         "auth": "active",
         "cognitive_engine": type(agent.cognitive).__name__,
+        "personality": agent.personality.encoder.info(),
     })
 
 
@@ -178,6 +179,7 @@ def admin_user_profile(target_user: str):
         "user_info": user_info,
         "stats": stats,
         "memories": memories,
+        "personality": agent.get_personality_profile(target_user),
     })
 
 
@@ -242,6 +244,16 @@ def user_memory(user_id: str):
         if user["role"] != "admin" and user["username"] != user_id and user["id"] != user_id:
             return jsonify({"error": "无权查看其他用户的记忆画像", "code": "FORBIDDEN"}), 403
     return jsonify({"user_id": user_id, "memories": agent.search_user_memory(user_id, request.args.get("q", ""), int(request.args.get("limit", 20)))})
+
+
+@app.get("/v1/users/<user_id>/personality")
+def user_personality(user_id: str):
+    """查询用户大五人格督促档案。普通用户只能查自己；管理员可查任意用户。"""
+    user = get_current_user()
+    if user:
+        if user["role"] != "admin" and user["username"] != user_id and user["id"] != user_id:
+            return jsonify({"error": "无权查看其他用户的人格档案", "code": "FORBIDDEN"}), 403
+    return jsonify(agent.get_personality_profile(user_id))
 
 
 @app.post("/v1/users/<user_id>/memory/<memory_id>/forget")

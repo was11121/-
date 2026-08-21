@@ -14,3 +14,7 @@ Thumbs.db
 .venv/
 venv/
 env/
+.cache/
+huggingface/
+*.bin
+*.safetensors
