@@ -20,6 +20,7 @@ Thumbs.db
 venv/
 env/
 .cache/
+.workbuddy/
 huggingface/
 *.bin
 *.safetensors
