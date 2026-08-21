@@ -25,6 +25,7 @@ python app.py
 - `memory_runtime/`：用户分区、反馈记忆、画像上下文
 - `personality_runtime/`：大五人格识别与秘书督促策略（补短板、扬长处）
 - `library_runtime/`：文档解析、净化、索引、检索和引用
+- `web_runtime/`：联网搜索与网页读取（searxng / Tavily / Jina Reader，可配 SSH 中转）
 - `secretary_runtime/`：项目秘书、现实补丁、审计和回滚
 - `tip_engine/`：换角度提示检测与冷却
 - `cognitive_engine/`：Python fallback 与可选 C++ 动态库适配器
@@ -46,6 +47,17 @@ python app.py
 未配置密钥或网络异常时，系统会降级到本地规则响应器，记忆、知识库与补丁流转仍可验证。
 
 可选 C++ 引擎：设置 `COGNITIVE_ENGINE_LIBRARY` 指向共享库；加载失败会自动回退到 Python。
+
+## 联网搜索配置
+
+对话中输入 `!search 关键词`（或包含"搜索/查一下/最新"等词、粘贴 http 链接）会自动触发联网：
+
+- **searxng**（本地实例，推荐）：`SEARXNG_URL=http://localhost:8080/search`，可用 Docker 一键起：`docker run -d -p 8080:8080 searxng/searxng`
+- **Tavily**：`TAVILY_API_KEY`（https://app.tavily.com 免费申请）；留空自动尝试读取 `~/.dsh/.credentials.yaml`
+- **Jina Reader**：网页正文读取，无需配置
+- **SSH 中转**（可选兜底）：设置 `WEB_RELAY_SSH_HOST/USER/KEY` 后，直连被墙时可经境外服务器中转搜索与读网页
+
+搜索通道自动故障转移，全部不可用时消息照常走普通对话。接口见 `API.md` 的 `/v1/web/*`。
 
 ## 登录与数据隔离
 

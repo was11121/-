@@ -296,6 +296,42 @@ def library_search():
     return jsonify({"results": agent.search_library(request.args.get("q", ""), int(request.args.get("limit", 10)))})
 
 
+# ----------------------------------------------------------------------
+# 联网搜索与网页读取接口
+# ----------------------------------------------------------------------
+
+@app.get("/v1/web/info")
+def web_info():
+    return jsonify(agent.web_info())
+
+
+@app.post("/v1/web/search")
+def web_search_endpoint():
+    payload = request.get_json(silent=True) or {}
+    query = str(payload.get("query") or "")
+    if not query:
+        return jsonify({"error": "query is required"}), 400
+    limit = int(payload.get("limit") or 5)
+    try:
+        result = agent.web_search(query, limit=limit)
+        return jsonify(result)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.post("/v1/web/fetch")
+def web_fetch_endpoint():
+    payload = request.get_json(silent=True) or {}
+    url = str(payload.get("url") or "")
+    if not url:
+        return jsonify({"error": "url is required"}), 400
+    try:
+        result = agent.web_fetch(url)
+        return jsonify(result)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
 @app.post("/v1/sync/<session_id>/confirm")
 def sync_confirm(session_id: str):
     payload = request.get_json(silent=True) or {}

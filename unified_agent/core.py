@@ -12,6 +12,7 @@ from memory_runtime import MemoryService
 from personality_runtime import PersonalityService
 from secretary_runtime import SecretaryService
 from tip_engine import TipEngine
+from web_runtime import WebSearchService, parse_web_intent
 
 from .llm import create_llm_responder
 from .protocol import Citation, InteractionEnvelope, MemoryEvent, ResponseEnvelope, Tip
@@ -20,7 +21,9 @@ from .protocol import Citation, InteractionEnvelope, MemoryEvent, ResponseEnvelo
 Responder = Callable[[str, str, str], str]
 
 
-def _fallback_responder(message: str, user_context: str, library_context: str) -> str:
+def _fallback_responder(message: str, user_context: str, library_context: str, web_context: str = "") -> str:
+    if web_context:
+        return f"以下是实时检索到的联网结果：\n\n{web_context}"
     if library_context:
         return f"我在图书馆里找到这些内容：\n\n{library_context}"
     if user_context:
@@ -36,6 +39,7 @@ class UnifiedAgent:
         self.personality = PersonalityService(data_dir)
         self.tips = TipEngine()
         self.cognitive = load_cognitive_engine()
+        self.web = WebSearchService(data_dir)
         self.responder = responder or create_llm_responder(fallback_responder=_fallback_responder)
 
     def handle_interaction(self, interaction: InteractionEnvelope) -> ResponseEnvelope:
@@ -50,6 +54,29 @@ class UnifiedAgent:
             library_results = self.library.search_library(interaction.message, limit=5)
         library_context = "\n".join(f"[{item['title']}] {item['snippet']}" for item in library_results)
 
+        # ---- 联网：识别意图 -> 搜索结果 -> 上下文/引用 ----
+        web_results: list[dict] = []
+        web_intent = parse_web_intent(interaction.message)
+        web_context = ""
+        if web_intent:
+            try:
+                if web_intent["intent"] == "fetch" and web_intent.get("url"):
+                    page = self.web.fetch_page(web_intent["url"])
+                    if page.get("content"):
+                        web_context = f"【已读取网页 {web_intent['url']}】\n{page['content'][:1800]}"
+                        web_results = [{
+                            "title": web_intent["url"],
+                            "url": web_intent["url"],
+                            "snippet": (page.get("content") or "")[:160],
+                            "source": "web",
+                        }]
+                else:
+                    payload = self.web.search(web_intent["query"], limit=5)
+                    web_context = self.web.build_context(web_intent["query"], limit=5)
+                    web_results = payload.get("results") or []
+            except Exception:
+                web_context = ""
+
         secretary_events: list[dict] = []
         requires_confirmation = False
         if self._looks_like_sync(interaction.message):
@@ -62,7 +89,7 @@ class UnifiedAgent:
             secretary_events.append({"type": "reality_patch", "data": patch})
             requires_confirmation = True
 
-        content = self.responder(interaction.message, user_context, library_context)
+        content = self.responder(interaction.message, user_context, library_context, web_context)
         memory_result = self.memory.record_interaction(interaction.user_id, interaction.message, content, source=interaction.channel)
         memory_events = [MemoryEvent("stored", item.get("id"), item.get("content", ""), float(item.get("confidence", 0)), item.get("category", "")) for item in memory_result.get("stored", [])]
         tip_list = self.tips.evaluate(interaction.user_id, interaction.message, self.memory.recent_interactions(interaction.user_id), risks=[])
@@ -77,6 +104,11 @@ class UnifiedAgent:
                 cooldown_seconds=300,
             ))
         citations = [Citation(item["document_id"], item["title"], item["source"], item.get("locator", ""), item.get("snippet", "")) for item in library_results]
+        citations.extend(
+            Citation("", item["title"], item.get("source") or "web", "", item.get("snippet", ""), item.get("url", ""))
+            for item in web_results
+            if item.get("url")
+        )
         return ResponseEnvelope(
             content=content,
             citations=citations,
@@ -123,6 +155,15 @@ class UnifiedAgent:
 
     def search_library(self, query: str, limit: int = 5) -> list[dict]:
         return self.library.search_library(query, limit)
+
+    def web_search(self, query: str, limit: int = 5) -> dict:
+        return self.web.search(query, limit=limit)
+
+    def web_fetch(self, url: str) -> dict:
+        return self.web.fetch_page(url)
+
+    def web_info(self) -> dict:
+        return self.web.info()
 
     def confirm_patch(self, patch_id: str, actor: str) -> dict:
         return self.secretary.confirm_patch(patch_id, actor)
