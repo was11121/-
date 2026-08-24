@@ -1,0 +1,366 @@
+{
+  "seeds": [
+    42
+  ],
+  "results": [
+    {
+      "seed": 42,
+      "baselines": {
+        "mean": {
+          "n_comments": 15007,
+          "comment_mae": {
+            "extraversion": 0.28442767747153647,
+            "neuroticism": 0.27794439255810954,
+            "agreeableness": 0.2724871200038278,
+            "conscientiousness": 0.25120533254359245,
+            "openness": 0.2731444447477514
+          },
+          "comment_pearson": {
+            "extraversion": 0.0,
+            "neuroticism": 0.0,
+            "agreeableness": 0.0,
+            "conscientiousness": 0.0,
+            "openness": 0.0
+          },
+          "comment_mae_mean": 0.2718417934649635,
+          "comment_pearson_mean": 0.0,
+          "n_authors": 215,
+          "author_mae": {
+            "extraversion": 0.2847390478173661,
+            "neuroticism": 0.2827338556997305,
+            "agreeableness": 0.27250265832557236,
+            "conscientiousness": 0.2517051964565072,
+            "openness": 0.2745324300818665
+          },
+          "author_pearson": {
+            "extraversion": 0.0,
+            "neuroticism": 0.0,
+            "agreeableness": 0.0,
+            "conscientiousness": 0.0,
+            "openness": 0.0
+          },
+          "author_mae_mean": 0.27324263767620854,
+          "author_pearson_mean": 0.0,
+          "kind": "mean_baseline"
+        },
+        "linear_probe": {
+          "n_comments": 15007,
+          "comment_mae": {
+            "extraversion": 0.282457912363598,
+            "neuroticism": 0.2773274678130979,
+            "agreeableness": 0.2672341977108148,
+            "conscientiousness": 0.25334066563218427,
+            "openness": 0.27161441193653385
+          },
+          "comment_pearson": {
+            "extraversion": 0.08673996340851632,
+            "neuroticism": 0.10827540087970068,
+            "agreeableness": 0.13648429698145656,
+            "conscientiousness": -0.0027718899748427023,
+            "openness": 0.10390870423200821
+          },
+          "comment_mae_mean": 0.27039493109124574,
+          "comment_pearson_mean": 0.08652729510536782,
+          "n_authors": 215,
+          "author_mae": {
+            "extraversion": 0.28165787482177884,
+            "neuroticism": 0.27912307033278344,
+            "agreeableness": 0.2671013105346826,
+            "conscientiousness": 0.25155767419638525,
+            "openness": 0.270231562870353
+          },
+          "author_pearson": {
+            "extraversion": 0.25811632244338223,
+            "neuroticism": 0.30881466158951265,
+            "agreeableness": 0.346770305061331,
+            "conscientiousness": 0.03324098779991197,
+            "openness": 0.25656770166632625
+          },
+          "author_mae_mean": 0.2699342985511966,
+          "author_pearson_mean": 0.24070199571209283,
+          "kind": "linear_probe"
+        }
+      },
+      "smoke_pretrain": {
+        "extraversion": {
+          "delta": 0.05893203616142273,
+          "pos": 0.4912034869194031,
+          "neg": 0.43227145075798035
+        },
+        "neuroticism": {
+          "delta": 0.034504473209381104,
+          "pos": 0.5817904472351074,
+          "neg": 0.5472859740257263
+        },
+        "conscientiousness": {
+          "delta": 0.05778193473815918,
+          "pos": 0.41567444801330566,
+          "neg": 0.3578925132751465
+        }
+      },
+      "smoke_pretrain_ok": false,
+      "stage1-head": {
+        "best_fisher_z_r": 0.061169615263786475,
+        "epochs_ran": 6,
+        "log": [
+          {
+            "epoch": 0,
+            "loss": 0.02175658421419903,
+            "val_fisher_z_mean_r": 0.044581862167048104,
+            "val_author_mae": 0.2691867753603431,
+            "val_author_pearson": {
+              "extraversion": 0.027292342654468175,
+              "neuroticism": 0.01977028263003659,
+              "agreeableness": -0.0043642527297361984,
+              "conscientiousness": 0.07164671242775857,
+              "openness": 0.10815508184927637
+            }
+          },
+          {
+            "epoch": 1,
+            "loss": 0.02153425850067102,
+            "val_fisher_z_mean_r": 0.05188467172329212,
+            "val_author_mae": 0.265968064729904,
+            "val_author_pearson": {
+              "extraversion": 0.08793725526268316,
+              "neuroticism": 0.0009796806751918563,
+              "agreeableness": 0.0245006834532651,
+              "conscientiousness": 0.04792336961067226,
+              "openness": 0.09773319414155435
+            }
+          },
+          {
+            "epoch": 2,
+            "loss": 0.021375773702292683,
+            "val_fisher_z_mean_r": 0.05769588304070481,
+            "val_author_mae": 0.2650448245728432,
+            "val_author_pearson": {
+              "extraversion": 0.0853708667079453,
+              "neuroticism": -0.018984865802400382,
+              "agreeableness": 0.05195179133491522,
+              "conscientiousness": 0.05900352422877675,
+              "openness": 0.11068205536465581
+            }
+          },
+          {
+            "epoch": 3,
+            "loss": 0.021157618006040713,
+            "val_fisher_z_mean_r": 0.05982285748732109,
+            "val_author_mae": 0.2678873277212991,
+            "val_author_pearson": {
+              "extraversion": 0.12217641106251426,
+              "neuroticism": -0.021331402795017176,
+              "agreeableness": 0.06094619359496399,
+              "conscientiousness": 0.03349303733060845,
+              "openness": 0.10312141469023028
+            }
+          },
+          {
+            "epoch": 4,
+            "loss": 0.020906547443223688,
+            "val_fisher_z_mean_r": 0.06032696484564314,
+            "val_author_mae": 0.264910578389847,
+            "val_author_pearson": {
+              "extraversion": 0.1311134707988582,
+              "neuroticism": -0.04791887140808672,
+              "agreeableness": 0.06210922460953829,
+              "conscientiousness": 0.04863815859343789,
+              "openness": 0.10680969682820933
+            }
+          },
+          {
+            "epoch": 5,
+            "loss": 0.020830151581292797,
+            "val_fisher_z_mean_r": 0.061169615263786475,
+            "val_author_mae": 0.26479458141638784,
+            "val_author_pearson": {
+              "extraversion": 0.12750885207619572,
+              "neuroticism": -0.0444888162641385,
+              "agreeableness": 0.06582389900927928,
+              "conscientiousness": 0.049469903437559144,
+              "openness": 0.10670460052571078
+            }
+          }
+        ]
+      },
+      "stage2-backbone": {
+        "best_fisher_z_r": 0.16069155659656592,
+        "epochs_ran": 7,
+        "log": [
+          {
+            "epoch": 0,
+            "loss": 0.021147347912341057,
+            "val_fisher_z_mean_r": 0.0513841209516754,
+            "val_author_mae": 0.2718520679532789,
+            "val_author_pearson": {
+              "extraversion": 0.12781942834894872,
+              "neuroticism": -0.10158664205677423,
+              "agreeableness": 0.07677363335432624,
+              "conscientiousness": 0.06253925008044436,
+              "openness": 0.09076644288984792
+            }
+          },
+          {
+            "epoch": 1,
+            "loss": 0.020956749990656824,
+            "val_fisher_z_mean_r": 0.1254974437231131,
+            "val_author_mae": 0.2658852818902842,
+            "val_author_pearson": {
+              "extraversion": 0.16816621093103945,
+              "neuroticism": 0.039349154078197245,
+              "agreeableness": 0.18504244300158262,
+              "conscientiousness": 0.050331284476844595,
+              "openness": 0.18203997483014372
+            }
+          },
+          {
+            "epoch": 2,
+            "loss": 0.020844963311353427,
+            "val_fisher_z_mean_r": 0.10915311051922531,
+            "val_author_mae": 0.26390387284374517,
+            "val_author_pearson": {
+              "extraversion": 0.1614844992075297,
+              "neuroticism": 0.0646461345783871,
+              "agreeableness": 0.12760247511736952,
+              "conscientiousness": 0.04692739586492675,
+              "openness": 0.14402939687216693
+            }
+          },
+          {
+            "epoch": 3,
+            "loss": 0.020526563607438833,
+            "val_fisher_z_mean_r": 0.13022661619947531,
+            "val_author_mae": 0.2635320765074602,
+            "val_author_pearson": {
+              "extraversion": 0.20724724208572823,
+              "neuroticism": 0.050301895973676215,
+              "agreeableness": 0.17327623171569068,
+              "conscientiousness": 0.06263527782696461,
+              "openness": 0.15519022131337157
+            }
+          },
+          {
+            "epoch": 4,
+            "loss": 0.020121923332732772,
+            "val_fisher_z_mean_r": 0.16069155659656592,
+            "val_author_mae": 0.26008766349838225,
+            "val_author_pearson": {
+              "extraversion": 0.2144479242251437,
+              "neuroticism": 0.13149185980969375,
+              "agreeableness": 0.20144101943089587,
+              "conscientiousness": 0.07257686629332731,
+              "openness": 0.18142619155181913
+            }
+          },
+          {
+            "epoch": 5,
+            "loss": 0.019870956664432785,
+            "val_fisher_z_mean_r": 0.15937784852447917,
+            "val_author_mae": 0.25979344470036586,
+            "val_author_pearson": {
+              "extraversion": 0.19626842212388254,
+              "neuroticism": 0.13489154973017262,
+              "agreeableness": 0.1980239789516843,
+              "conscientiousness": 0.06974749046950217,
+              "openness": 0.19606613697300262
+            }
+          },
+          {
+            "epoch": 6,
+            "loss": 0.019703467265923997,
+            "val_fisher_z_mean_r": 0.1580166604507295,
+            "val_author_mae": 0.2602880793549987,
+            "val_author_pearson": {
+              "extraversion": 0.18532861731529407,
+              "neuroticism": 0.13855304002472602,
+              "agreeableness": 0.1994036185819261,
+              "conscientiousness": 0.07443345330169682,
+              "openness": 0.19076556220941152
+            }
+          }
+        ]
+      },
+      "smoke_posttrain": {
+        "extraversion": {
+          "delta": 0.26652756333351135,
+          "pos": 0.6357995867729187,
+          "neg": 0.36927202343940735
+        },
+        "neuroticism": {
+          "delta": 0.37514638900756836,
+          "pos": 0.8368891477584839,
+          "neg": 0.4617427587509155
+        },
+        "conscientiousness": {
+          "delta": 0.03357285261154175,
+          "pos": 0.6428995728492737,
+          "neg": 0.6764724254608154
+        }
+      },
+      "smoke_posttrain_ok": false,
+      "degraded_dims": [
+        "conscientiousness"
+      ],
+      "test_report": {
+        "n_comments": 215,
+        "comment_mae": {
+          "extraversion": 0.27038110693007017,
+          "neuroticism": 0.2740808500886657,
+          "agreeableness": 0.2491013552213824,
+          "conscientiousness": 0.24034044426367726,
+          "openness": 0.2753162753789924
+        },
+        "comment_pearson": {
+          "extraversion": 0.2223549090566928,
+          "neuroticism": 0.2626867189402742,
+          "agreeableness": 0.2723584092882657,
+          "conscientiousness": 0.1511662483688496,
+          "openness": 0.14217101774657595
+        },
+        "comment_mae_mean": 0.2618440063765576,
+        "comment_pearson_mean": 0.21014746068013168,
+        "n_authors": 215,
+        "author_mae": {
+          "extraversion": 0.27038110693007017,
+          "neuroticism": 0.2740808500886657,
+          "agreeableness": 0.2491013552213824,
+          "conscientiousness": 0.24034044426367726,
+          "openness": 0.2753162753789924
+        },
+        "author_pearson": {
+          "extraversion": 0.2223549090566928,
+          "neuroticism": 0.2626867189402742,
+          "agreeableness": 0.2723584092882657,
+          "conscientiousness": 0.1511662483688496,
+          "openness": 0.14217101774657595
+        },
+        "author_mae_mean": 0.2618440063765576,
+        "author_pearson_mean": 0.21014746068013168,
+        "fisher_z_mean_r": 0.210793518485537,
+        "bootstrap_ci": {
+          "mean": 0.21175426754562243,
+          "lo": 0.14772818286159609,
+          "hi": 0.26860864560452635,
+          "n_boot": 400
+        }
+      },
+      "final_model_dir": "C:\\Users\\wby15\\Desktop\\文件\\MyAgentUnified\\models\\psych-personality-bert-full\\seed42",
+      "beat_mean_baseline": true,
+      "pass": false,
+      "n_pass_r035": 0
+    }
+  ],
+  "hyperparams": {
+    "max_length": 256,
+    "huber_delta": 0.1,
+    "bag_size": 16,
+    "head_lr": 0.0005,
+    "backbone_lr": 2e-05,
+    "weight_decay": 0.01,
+    "classifier_dropout": 0.2,
+    "warmup_ratio": 0.1,
+    "max_grad_norm": 1.0,
+    "stage_patience": 2,
+    "early_stop_patience": 4
+  }
+}
