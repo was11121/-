@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import uuid
 from typing import Callable
@@ -9,10 +10,12 @@ from typing import Callable
 from cognitive_engine import load_cognitive_engine
 from library_runtime import LocalLibrary
 from memory_runtime import MemoryService
+from memory_runtime.mcp_client import MemoryMcpClient
 from personality_runtime import PersonalityService
 from secretary_runtime import SecretaryService
 from tip_engine import TipEngine
 from web_runtime import WebSearchService, parse_web_intent
+from web_runtime.mcp_client import WebMcpClient
 
 from .llm import create_llm_responder
 from .protocol import Citation, InteractionEnvelope, MemoryEvent, ResponseEnvelope, Tip
@@ -31,16 +34,54 @@ def _fallback_responder(message: str, user_context: str, library_context: str, w
     return f"我已收到：{message}"
 
 
+def _memory_backend() -> str:
+    return (os.getenv("MEMORY_BACKEND") or "local").strip().lower()
+
+
+def _web_backend() -> str:
+    return (os.getenv("WEB_BACKEND") or "local").strip().lower()
+
+
 class UnifiedAgent:
     def __init__(self, data_dir: str | None = None, responder: Responder | None = None):
-        self.memory = MemoryService(data_dir)
+        self.data_dir = data_dir
+        self._init_memory_backend()
         self.library = LocalLibrary(data_dir)
         self.secretary = SecretaryService(data_dir)
-        self.personality = PersonalityService(data_dir)
         self.tips = TipEngine()
         self.cognitive = load_cognitive_engine()
-        self.web = WebSearchService(data_dir)
+        self._init_web_backend()
         self.responder = responder or create_llm_responder(fallback_responder=_fallback_responder)
+
+    def _init_memory_backend(self) -> None:
+        backend = _memory_backend()
+        if backend == "mcp":
+            mcp = MemoryMcpClient()
+            self.memory = mcp
+            self.personality = mcp
+            self.memory_backend = "mcp"
+        else:
+            self.memory = MemoryService(self.data_dir)
+            self.personality = PersonalityService(self.data_dir)
+            self.memory_backend = "local"
+
+    def _init_web_backend(self) -> None:
+        backend = _web_backend()
+        if backend == "mcp":
+            self.web = WebMcpClient()
+            self.web_backend = "mcp"
+        else:
+            self.web = WebSearchService(self.data_dir)
+            self.web_backend = "local"
+
+    def apply_runtime_settings(self) -> dict[str, str]:
+        """按最新环境变量热切换 memory/web 后端。"""
+        self._init_memory_backend()
+        self._init_web_backend()
+        return {
+            "memory_backend": self.memory_backend,
+            "web_backend": self.web_backend,
+        }
 
     def handle_interaction(self, interaction: InteractionEnvelope) -> ResponseEnvelope:
         if not interaction.message:
@@ -79,14 +120,30 @@ class UnifiedAgent:
 
         secretary_events: list[dict] = []
         requires_confirmation = False
+        # 人格驱动的任务脚手架：低C/拖延者自动重写为可开始的第一步
+        task_scaffold = (personality_profile.get("playbook") or {}).get("task_scaffold") or {}
         if self._looks_like_sync(interaction.message):
             draft = self.secretary.draft_sync(interaction.workspace_id, interaction.message, interaction.user_id)
             secretary_events.append({"type": "sync_draft", "data": draft})
             requires_confirmation = True
         elif self._looks_like_task(interaction.message):
             title = re.sub(r"^(?:帮我|请)?(?:创建|新增|添加)?(?:一个)?任务[:：]?", "", interaction.message).strip() or interaction.message
+            # 初版：对拖延倾向或低尽责，追加脚手架提示到 proposed_change
+            work = personality_profile.get("work_style") or {}
+            bands = work.get("bands") or {}
+            if work.get("execution_style") == "procrastinator" or bands.get("conscientiousness") == "low":
+                scaffold_hint = "（助手已按你偏好改写为可开始的第一步：新建文档写3行提纲，25分钟计时）"
+                if scaffold_hint not in title:
+                    title = f"{title} {scaffold_hint}"
+                    # 同时把时间盒写入 evidence 便于审计
+                    task_scaffold_text = "；".join(task_scaffold.get("steps") or [])
+                    if task_scaffold_text:
+                        title += f" | 脚手架：{task_scaffold_text[:80]}"
             patch = self.secretary.create_patch(interaction.workspace_id, "task", "new", "create", title, evidence=interaction.message, created_by=interaction.user_id)
             secretary_events.append({"type": "reality_patch", "data": patch})
+            # 把脚手架也作为秘书事件，便于前端展示
+            if task_scaffold.get("steps"):
+                secretary_events.append({"type": "task_scaffold", "data": task_scaffold})
             requires_confirmation = True
 
         content = self.responder(interaction.message, user_context, library_context, web_context)
@@ -109,6 +166,7 @@ class UnifiedAgent:
             for item in web_results
             if item.get("url")
         )
+        playbook = personality_profile.get("playbook") or {}
         return ResponseEnvelope(
             content=content,
             citations=citations,
@@ -119,14 +177,19 @@ class UnifiedAgent:
             audit_id="A-" + uuid.uuid4().hex[:10],
             metadata={"personality": {
                 "scores": personality_profile.get("scores"),
+                "traits": personality_profile.get("traits"),
                 "work_style": personality_profile.get("work_style"),
                 "playbook": {
-                    "headline": (personality_profile.get("playbook") or {}).get("headline"),
-                    "today_focus": (personality_profile.get("playbook") or {}).get("today_focus"),
-                    "gaps": (personality_profile.get("playbook") or {}).get("gaps"),
-                    "strengths": (personality_profile.get("playbook") or {}).get("strengths"),
+                    "headline": playbook.get("headline"),
+                    "today_focus": playbook.get("today_focus"),
+                    "gaps": playbook.get("gaps"),
+                    "strengths": playbook.get("strengths"),
+                    "tactics": playbook.get("tactics"),
+                    "task_scaffold": playbook.get("task_scaffold"),
+                    "collaboration": playbook.get("collaboration"),
                 },
                 "model": personality_profile.get("model"),
+                "samples": personality_profile.get("samples"),
             }},
         )
 
