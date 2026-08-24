@@ -26,9 +26,15 @@ def create_llm_responder(
     """创建统一的 LLM Responder 函数，兼容 OpenAI Chat Completions 规范。"""
 
     def responder(message: str, user_context: str, library_context: str, web_context: str = "摘要为空") -> str:
-        key = api_key or os.getenv("MODEL_API_KEY") or DEFAULT_API_KEY
-        url = (base_url or os.getenv("BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
-        m = model or os.getenv("CURRENT_MODEL") or DEFAULT_MODEL
+        # 优先从 runtime_settings 热读取（跨 gunicorn worker 生效），回退 os.environ
+        try:
+            from storage import runtime_settings as _rs
+            _raw = _rs.load_raw()
+        except Exception:
+            _raw = {}
+        key = api_key or _raw.get("MODEL_API_KEY") or os.getenv("MODEL_API_KEY") or DEFAULT_API_KEY
+        url = (base_url or _raw.get("BASE_URL") or os.getenv("BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
+        m = model or _raw.get("CURRENT_MODEL") or os.getenv("CURRENT_MODEL") or DEFAULT_MODEL
 
         # 构建统一 System Prompt
         system_parts = [
