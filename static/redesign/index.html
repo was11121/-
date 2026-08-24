@@ -1337,10 +1337,9 @@
         <button id="authSubmitBtn" type="submit" class="btn btn-primary btn-block">登录</button>
       </form>
       <div class="auth-demo">
-        <span class="auth-demo-label">演示账号（点击填入）</span>
-        <div class="auth-demo-grid">
-          <button class="btn btn-sm btn-gold" onclick="fillDemoAccount('remedy_admin','Remedy@2025')"><i data-lucide="shield-check"></i>remedy_admin / Remedy@2025</button>
-          <button class="btn btn-sm" onclick="document.getElementById('authUsername').focus(); showToast('请通过“注册”创建普通用户', 'info')"><i data-lucide="user-plus"></i>注册新用户</button>
+        <span class="auth-demo-label">新用户请点击下方“注册”创建账号</span>
+        <div class="auth-demo-grid" style="grid-template-columns:1fr;">
+          <button class="btn btn-sm" onclick="setAuthMode('register'); document.getElementById('authUsername').focus()"><i data-lucide="user-plus"></i>去注册</button>
         </div>
       </div>
       <button class="auth-guest" onclick="enterAsGuest()">先以访客身份浏览</button>
