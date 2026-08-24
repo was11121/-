@@ -1,4 +1,4 @@
-"""清理遗留测试账号 alice/bob 的幂等迁移脚本"""
+"""清理遗留测试账号 alice/bob/admin 的幂等迁移脚本（仅保留 remedy_admin）"""
 import os
 import sqlite3
 from pathlib import Path
@@ -10,7 +10,7 @@ def clean_auth(data_dir: Path):
         return
     conn = sqlite3.connect(db)
     try:
-        for name in ("alice", "bob"):
+        for name in ("alice", "bob", "admin"):
             row = conn.execute("SELECT id FROM users WHERE username=?", (name,)).fetchone()
             if row:
                 uid = row[0]
@@ -29,7 +29,7 @@ def clean_users_db(data_dir: Path):
         return
     conn = sqlite3.connect(db)
     try:
-        for uid in ("alice", "bob", "u_alice", "u_bob"):
+        for uid in ("alice", "bob", "admin", "u_alice", "u_bob", "u_admin"):
             for table in ("memories", "interactions", "feedback", "personality_observations"):
                 try:
                     cur = conn.execute(f"DELETE FROM {table} WHERE user_id=?", (uid,))

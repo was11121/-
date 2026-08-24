@@ -68,8 +68,8 @@ class AuthService:
             # 仅保留 Remedy 管理员，移除测试账号 alice/bob
             remedy_pwd = os.getenv("REMEDY_ADMIN_PASSWORD", "Remedy@2025")
             self._ensure_default_user(conn, "remedy_admin", remedy_pwd, role="admin", nickname="Remedy Admin")
-            # 清理遗留测试账号（幂等）
-            for legacy in ("alice", "bob"):
+            # 清理遗留测试账号（幂等，admin 为旧默认管理员，现仅保留 remedy_admin）
+            for legacy in ("alice", "bob", "admin"):
                 row = conn.execute("SELECT id FROM users WHERE username = ?", (legacy,)).fetchone()
                 if row:
                     uid = row["id"]
