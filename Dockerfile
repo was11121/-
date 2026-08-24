@@ -1,4 +1,4 @@
-# MyAgentUnified - Linux 生产镜像
+# Remedy - Linux 生产镜像
 # 架构: gunicorn + Flask；集中库走 PostgreSQL（compose 提供），本地可用 SQLite。
 # 默认不安装 torch/transformers（镜像小）；需要 BERT 人格时:
 #   docker build --build-arg WITH_AI=1 .

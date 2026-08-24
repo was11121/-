@@ -79,13 +79,14 @@ python app.py
 
 ## 登录与数据隔离
 
-打开控制台后需先登录。记忆按用户落在独立 SQLite 文件 `data/users/<user_id>/memory.sqlite3`，账户与令牌存在 `data/auth.sqlite3`。
+打开控制台后需先登录。所有用户数据统一落库 `data/users.db`（集中库，按 `user_id` 分区），账户与令牌存在 `data/auth.sqlite3`。
 
-默认账号：
-- 管理员 `admin` / `admin123`：可查看全部用户列表与个人画像
-- 普通用户 `alice` / `123456`、`bob` / `123456`：仅可使用助手功能并访问自身记忆
+账号说明（Remedy 品牌）：
+- 唯一管理员 `remedy_admin` / `Remedy@2025`（或环境变量 `REMEDY_ADMIN_PASSWORD`）：可查看全部用户 `名字/账号/人格雷达 + 聊天检索/删除/标注`，入口 `static/redesign/admin.html`
+- 普通用户：通过 `POST /v1/auth/register` 开放注册即 `role=user`，仅可使用助手功能并访问自身记忆；未登录或越权访问他人记忆/`/v1/admin/*` 返回 `401`/`403`
+- 旧测试账号 `alice` / `bob` 已彻底移除（`tools/migrate_remove_test_users.py` 幂等清理 `auth.sqlite3` 与 `users.db` 四表），`login alice` 将失败
 
-请求头使用 `Authorization: Bearer <token>`。普通用户访问他人记忆或 `/v1/admin/*` 会返回 `403`。接口细节见 `API.md` 第 3.16、3.17 节。
+请求头使用 `Authorization: Bearer <token>`。接口细节见 `API.md` 第 3.16、3.17 节。
 
 ## 大五人格与秘书督促
 

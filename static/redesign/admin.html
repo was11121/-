@@ -96,8 +96,8 @@
       </div>
       <div id="chatList" class="chat-list"><p style="color:var(--muted);">请选择用户</p></div>
       <div style="display:flex; gap:8px; margin-top:12px;">
-        <button class="btn" onclick="loadChats(offset-Math.max(0,limit))">上一页</button>
-        <button class="btn" onclick="loadChats(offset+limit)">下一页</button>
+        <button class="btn" onclick="prevPage()">上一页</button>
+        <button class="btn" onclick="nextPage()">下一页</button>
         <span id="pageInfo" style="font-size:12px; color:var(--muted);"></span>
       </div>
     </div>

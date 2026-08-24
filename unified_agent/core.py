@@ -11,12 +11,18 @@ from typing import Callable
 from cognitive_engine import load_cognitive_engine
 from library_runtime import LocalLibrary
 from memory_runtime import MemoryService
-from memory_runtime.mcp_client import MemoryMcpClient
+try:
+    from memory_runtime.mcp_client import MemoryMcpClient  # type: ignore
+except Exception:  # pragma: no cover - MCP 可选，未安装时回退本地
+    MemoryMcpClient = None  # type: ignore
 from personality_runtime import PersonalityService
 from secretary_runtime import SecretaryService
 from tip_engine import TipEngine
 from web_runtime import WebSearchService, parse_web_intent
-from web_runtime.mcp_client import WebMcpClient
+try:
+    from web_runtime.mcp_client import WebMcpClient  # type: ignore
+except Exception:  # pragma: no cover
+    WebMcpClient = None  # type: ignore
 
 from .llm import create_llm_responder
 from .protocol import Citation, InteractionEnvelope, MemoryEvent, ResponseEnvelope, Tip
@@ -56,24 +62,31 @@ class UnifiedAgent:
 
     def _init_memory_backend(self) -> None:
         backend = _memory_backend()
-        if backend == "mcp":
-            mcp = MemoryMcpClient()
-            self.memory = mcp
-            self.personality = mcp
-            self.memory_backend = "mcp"
-        else:
-            self.memory = MemoryService(self.data_dir)
-            self.personality = PersonalityService(self.data_dir)
-            self.memory_backend = "local"
+        if backend == "mcp" and MemoryMcpClient is not None:
+            try:
+                mcp = MemoryMcpClient()
+                self.memory = mcp
+                self.personality = mcp
+                self.memory_backend = "mcp"
+                return
+            except Exception:
+                pass
+        # 回退本地（MCP 未安装或初始化失败）
+        self.memory = MemoryService(self.data_dir)
+        self.personality = PersonalityService(self.data_dir)
+        self.memory_backend = "local"
 
     def _init_web_backend(self) -> None:
         backend = _web_backend()
-        if backend == "mcp":
-            self.web = WebMcpClient()
-            self.web_backend = "mcp"
-        else:
-            self.web = WebSearchService(self.data_dir)
-            self.web_backend = "local"
+        if backend == "mcp" and WebMcpClient is not None:
+            try:
+                self.web = WebMcpClient()
+                self.web_backend = "mcp"
+                return
+            except Exception:
+                pass
+        self.web = WebSearchService(self.data_dir)
+        self.web_backend = "local"
 
     def apply_runtime_settings(self) -> dict[str, str]:
         """按最新环境变量热切换 memory/web 后端。"""

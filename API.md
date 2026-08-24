@@ -488,9 +488,9 @@ curl -X POST http://127.0.0.1:8091/v1/interactions \
 
 鉴权方式：`Authorization: Bearer <token>`，也可使用查询参数 `?token=`。
 
-默认内置账号（首次启动自动写入 `data/auth.sqlite3`）：
-- 管理员：`admin` / `admin123`（`role=admin`）
-- 普通用户：`alice` / `123456`、`bob` / `123456`（`role=user`）
+默认内置账号（首次启动自动写入 `data/auth.sqlite3`，Remedy 品牌）：
+- 唯一管理员：`remedy_admin` / `Remedy@2025`（或环境变量 `REMEDY_ADMIN_PASSWORD`，`role=admin`）
+- 普通用户：通过 `POST /v1/auth/register` 开放注册，强制 `role=user`；旧测试账号 `alice`/`bob` 已移除，`tools/migrate_remove_test_users.py` 幂等清理
 
 #### 3.16.1 注册 `POST /v1/auth/register`
 - **权限**: Public（注册角色固定为 `user`）
@@ -505,7 +505,7 @@ curl -X POST http://127.0.0.1:8091/v1/interactions \
 
 #### 3.16.2 登录 `POST /v1/auth/login`
 ```json
-{ "username": "alice", "password": "123456" }
+{ "username": "remedy_admin", "password": "Remedy@2025" }
 ```
 - **响应** (`200 OK`):
 ```json
@@ -513,10 +513,10 @@ curl -X POST http://127.0.0.1:8091/v1/interactions \
   "token": "tok_...",
   "expires_at": "2026-08-23T12:00:00+00:00",
   "user": {
-    "id": "u_alice",
-    "username": "alice",
-    "role": "user",
-    "nickname": "爱丽丝 (Alice)"
+    "id": "u_remedy_admin",
+    "username": "remedy_admin",
+    "role": "admin",
+    "nickname": "Remedy Admin"
   }
 }
 ```
@@ -534,21 +534,26 @@ curl -X POST http://127.0.0.1:8091/v1/interactions \
 ### 3.17 管理员专属画像分析接口
 
 #### 3.17.1 全量用户列表 `GET /v1/admin/users`
-- **权限**: Admin Only
-- **响应示例**:
+- **权限**: Admin Only（`require_admin`，普通用户 `403`）
+- **响应示例**（含人格雷达供 `admin.html` 直接渲染）:
 ```json
 {
   "users": [
     {
-      "id": "u_alice",
-      "username": "alice",
-      "nickname": "爱丽丝 (Alice)",
-      "role": "user",
+      "id": "u_remedy_admin",
+      "username": "remedy_admin",
+      "nickname": "Remedy Admin",
+      "role": "admin",
       "created_at": "2026-08-20T12:00:00+00:00",
       "stats": {
         "total_memories": 3,
         "total_interactions": 8,
         "categories": { "preference_like": 2 }
+      },
+      "personality": {
+        "scores": { "openness": 0.52, "conscientiousness": 0.61, "extraversion": 0.48, "agreeableness": 0.55, "neuroticism": 0.43 },
+        "work_style": { "thinking_label": "理性", "execution_label": "执行型" },
+        "samples": 12
       }
     }
   ]
@@ -558,7 +563,12 @@ curl -X POST http://127.0.0.1:8091/v1/interactions \
 #### 3.17.2 指定用户完整画像 `GET /v1/admin/users/{target_user}/profile`
 - **权限**: Admin Only
 - **路径参数**: `target_user` 可为 `username` 或用户 `id`
-- **响应**: `{ "target_user", "user_info", "stats", "memories": [...] }`
+- **响应**: `{ "target_user", "user_info", "stats", "memories": [...], "personality": {...} }`
+
+#### 3.17.3 管理台聊天穿透（新增）
+- `GET /v1/admin/users/<user_id>/interactions?q=&from=&to=&limit=20&offset=0` — 分页检索 `InteractionRow`，`q` 模糊 `message/reply`，时间 `ISO8601`，需 `require_admin`
+- `DELETE /v1/admin/interactions/<interaction_id>` — 删除单条聊天，返回 `{success:true}`
+- `POST /v1/admin/interactions/<interaction_id>/annotate` — `{tag, note, user_id}` 写入 `FeedbackRow(feedback_type=annotate)`，返回 `{feedback_id}`
 
 ---
 

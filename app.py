@@ -391,5 +391,11 @@ def qq_webhook():
 def redesign_index():
     return app.send_static_file("redesign/index.html")
 
+
+@app.get("/admin")
+def admin_console():
+    # 前端自行通过 /v1/auth/me 校验 remedy_admin，否则跳登录；直接返回静态页
+    return app.send_static_file("redesign/admin.html")
+
 if __name__ == "__main__":
     app.run(host=os.getenv("HOST", "127.0.0.1"), port=int(os.getenv("PORT", "8091")), debug=False)

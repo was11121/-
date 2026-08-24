@@ -21,7 +21,7 @@ from sqlalchemy import func, select, update
 from storage.db import get_session, init_db
 from storage.models import FeedbackRow, InteractionRow, MemoryRow
 
-FEEDBACK_TYPES = {"confirm", "correct", "reject", "forget", "prefer_style", "change_preference"}
+FEEDBACK_TYPES = {"confirm", "correct", "reject", "forget", "prefer_style", "change_preference", "annotate"}
 
 
 def _now() -> str:

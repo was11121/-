@@ -1,14 +1,16 @@
-let token = localStorage.getItem("token") || "";
+let token = localStorage.getItem("myagent_token") || localStorage.getItem("token") || "";
 let selectedUser = null;
 let offset = 0;
 let limit = 20;
 let radarInstance = null;
 
 function authHeaders(h={}) {
+  if (!token) token = localStorage.getItem("myagent_token") || localStorage.getItem("token") || "";
   if (token) h["Authorization"] = "Bearer " + token;
   return h;
 }
 function handleLogout(){
+  localStorage.removeItem("myagent_token");
   localStorage.removeItem("token");
   location.href="/redesign";
 }
@@ -26,16 +28,23 @@ async function loadUsers(){
   tbody.innerHTML = "";
   j.users.forEach(u=>{
     const tr=document.createElement("tr");
-    tr.onclick=()=>selectUser(u);
+    tr.dataset.username = u.username;
+    tr.onclick=(e)=>selectUser(u, e.currentTarget);
     tr.innerHTML=`<td>${u.nickname||u.username}</td><td>${u.username}</td><td><span class="tag">${u.role}</span></td><td>${u.stats.total_memories}</td><td>${u.stats.total_interactions}</td><td>${u.personality.samples||0}</td>`;
     tbody.appendChild(tr);
   });
 }
-function selectUser(u){
+function selectUser(u, el){
   selectedUser=u;
   document.querySelectorAll("#userTbody tr").forEach(tr=>tr.classList.remove("active"));
-  // highlight
-  event.currentTarget.classList.add("active");
+  // highlight: if event target passed, use it; otherwise find by username
+  const target = el || (typeof event !== 'undefined' && event.currentTarget) || null;
+  if (target) target.classList.add("active");
+  else {
+    document.querySelectorAll("#userTbody tr").forEach(tr=>{
+      if (tr.dataset.username === u.username) tr.classList.add("active");
+    });
+  }
   showRadar(u);
   document.getElementById("chatPanel").style.display="block";
   offset=0;
@@ -103,9 +112,17 @@ async function annotateChat(id){
   const j=await r.json();
   if(j.feedback_id || j.success) alert("已标注"); else alert("标注失败 "+(j.error||""));
 }
+function prevPage(){
+  offset = Math.max(0, offset - limit);
+  loadChats();
+}
+function nextPage(){
+  offset = offset + limit;
+  loadChats();
+}
 function escapeHtml(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 (function init(){
-  token=localStorage.getItem("token")||"";
+  token=localStorage.getItem("myagent_token") || localStorage.getItem("token") || "";
   if(!token){ location.href="/redesign"; return; }
   checkAdmin();
   loadUsers();

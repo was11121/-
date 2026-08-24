@@ -970,6 +970,7 @@
           <i data-lucide="shield-check"></i>
           <select id="adminTargetSelect" title="切换画像目标用户" onchange="onAdminTargetChange()"></select>
         </div>
+        <a id="adminConsoleBtn" href="/admin" class="btn btn-gold btn-sm hidden" title="仅 remedy_admin 可见"><i data-lucide="shield-check"></i>管理台</a>
         <button id="logoutBtn" class="btn btn-ghost btn-sm hidden" onclick="handleLogout()">
           <i data-lucide="log-out"></i><span>退出</span>
         </button>
@@ -1336,10 +1337,10 @@
         <button id="authSubmitBtn" type="submit" class="btn btn-primary btn-block">登录</button>
       </form>
       <div class="auth-demo">
-        <span class="auth-demo-label">测试账号</span>
+        <span class="auth-demo-label">演示账号（点击填入）</span>
         <div class="auth-demo-grid">
-          <button class="btn btn-sm btn-gold" onclick="fillDemoAccount('admin','admin123')"><i data-lucide="shield-check"></i>admin / admin123</button>
-          <button class="btn btn-sm" onclick="fillDemoAccount('alice','123456')"><i data-lucide="user"></i>alice / 123456</button>
+          <button class="btn btn-sm btn-gold" onclick="fillDemoAccount('remedy_admin','Remedy@2025')"><i data-lucide="shield-check"></i>remedy_admin / Remedy@2025</button>
+          <button class="btn btn-sm" onclick="document.getElementById('authUsername').focus(); showToast('请通过“注册”创建普通用户', 'info')"><i data-lucide="user-plus"></i>注册新用户</button>
         </div>
       </div>
       <button class="auth-guest" onclick="enterAsGuest()">先以访客身份浏览</button>
@@ -1504,12 +1505,14 @@
         badge.textContent = '管理员';
         badge.classList.add('admin');
         showEl('adminUserSwitcher');
+        showEl('adminConsoleBtn');
         showEl('adminPortraitPanel');
         loadAdminUsers();
       } else {
         badge.textContent = '普通用户';
         badge.classList.remove('admin');
         hideEl('adminUserSwitcher');
+        hideEl('adminConsoleBtn');
         hideEl('adminPortraitPanel');
       }
       updateMemoryUser();
@@ -1525,6 +1528,7 @@
       hideEl('authUserBar');
       hideEl('logoutBtn');
       hideEl('adminUserSwitcher');
+      hideEl('adminConsoleBtn');
       hideEl('adminPortraitPanel');
       updateMemoryUser();
     }
