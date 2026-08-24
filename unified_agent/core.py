@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import uuid
@@ -204,6 +205,57 @@ class UnifiedAgent:
 
     def get_personality_profile(self, user_id: str) -> dict:
         return self.personality.get_profile(user_id)
+
+    def search_user_interactions(self, user_id: str, query: str = "", limit: int = 20, offset: int = 0, from_time: str | None = None, to_time: str | None = None) -> dict:
+        """管理员检索用户聊天内容，支持关键词、时间窗与分页"""
+        # 复用 memory 的底层存储，兼容 local/mcp
+        if hasattr(self.memory, "search_interactions"):
+            return self.memory.search_interactions(user_id, query, limit, offset, from_time, to_time)  # type: ignore
+        # 本地直连
+        from storage.db import get_session
+        from storage.models import InteractionRow
+        from sqlalchemy import select, and_
+        import re
+        uid = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(user_id or "default").strip())[:80] or "default"
+        with get_session(self.data_dir) as session:
+            q = select(InteractionRow).where(InteractionRow.user_id == uid)
+            if from_time:
+                q = q.where(InteractionRow.created_at >= from_time)
+            if to_time:
+                q = q.where(InteractionRow.created_at <= to_time)
+            q = q.order_by(InteractionRow.created_at.desc()).offset(max(0, offset)).limit(max(1, min(limit, 100)))
+            rows = session.execute(q).scalars().all()
+            # 关键词过滤（内存）
+            if query:
+                ql = query.lower()
+                rows = [r for r in rows if ql in (r.message or "").lower() or ql in (r.reply or "").lower()]
+            total_q = select(InteractionRow).where(InteractionRow.user_id == uid)
+            total = len(session.execute(total_q).scalars().all())
+            return {
+                "user_id": uid,
+                "interactions": [
+                    {"id": r.id, "user_id": r.user_id, "message": r.message, "reply": r.reply, "source": r.source, "created_at": r.created_at}
+                    for r in rows
+                ],
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+            }
+
+    def delete_interaction(self, interaction_id: str) -> bool:
+        if hasattr(self.memory, "delete_interaction"):
+            return self.memory.delete_interaction(interaction_id)  # type: ignore
+        from storage.db import get_session
+        from storage.models import InteractionRow
+        from sqlalchemy import delete
+        with get_session(self.data_dir) as session:
+            res = session.execute(delete(InteractionRow).where(InteractionRow.id == interaction_id))
+            session.commit()
+            return res.rowcount > 0
+
+    def annotate_interaction(self, user_id: str, interaction_id: str, tag: str = "", note: str = "") -> dict:
+        # 复用 feedback 表记录标注
+        return self.apply_feedback(user_id, "annotate", memory_id=interaction_id, content=json.dumps({"tag": tag, "note": note}, ensure_ascii=False))
 
     def apply_feedback(self, user_id: str, feedback_type: str, memory_id: str | None = None, content: str = "") -> dict:
         result = self.memory.apply_feedback(user_id, feedback_type, memory_id, content)

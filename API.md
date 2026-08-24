@@ -1,6 +1,6 @@
-# MyAgent Unified API 接口规范文档
+# Remedy API 接口规范文档
 
-本文档定义了 **MyAgent Unified（现实补丁智能体）** 的统一交互协议、REST API、SSE 流式接口及 Webhook 规范。
+本文档定义了 **Remedy（现实补丁智能体）** 的统一交互协议、REST API、SSE 流式接口及 Webhook 规范。
 
 ---
 
@@ -32,7 +32,7 @@
 
 ## 1. 系统总览与架构理念
 
-MyAgent Unified 采用多子系统协同的架构设计：
+Remedy 采用多子系统协同的架构设计：
 - **Auth Runtime**：独立 `data/auth.sqlite3` 账户与令牌库；角色分为 `admin` / `user`。
 - **Memory Runtime**：用户级 SQLite 物理隔离记忆库（`data/users/<user_id>/memory.sqlite3`），自动提取偏好、身份、指令并维护置信度。普通用户只能读写自身分区，管理员可穿透查看全部画像。
 - **Library Runtime**：本地文档知识库，支持多格式清洗、SHA-256 去重与检索。
@@ -127,7 +127,7 @@ MyAgent Unified 采用多子系统协同的架构设计：
 ```json
 {
   "status": "ok",
-  "service": "reality-patch-agent",
+  "service": "remedy-agent",
   "memory": "local-isolated",
   "auth": "active",
   "cognitive_engine": "PythonCognitiveEngine"

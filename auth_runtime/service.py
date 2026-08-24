@@ -65,10 +65,16 @@ class AuthService:
                 );
                 """
             )
-            # 自动初始化默认管理员与默认普通用户
-            self._ensure_default_user(conn, "admin", "admin123", role="admin", nickname="系统管理员")
-            self._ensure_default_user(conn, "alice", "123456", role="user", nickname="爱丽丝 (Alice)")
-            self._ensure_default_user(conn, "bob", "123456", role="user", nickname="鲍勃 (Bob)")
+            # 仅保留 Remedy 管理员，移除测试账号 alice/bob
+            remedy_pwd = os.getenv("REMEDY_ADMIN_PASSWORD", "Remedy@2025")
+            self._ensure_default_user(conn, "remedy_admin", remedy_pwd, role="admin", nickname="Remedy Admin")
+            # 清理遗留测试账号（幂等）
+            for legacy in ("alice", "bob"):
+                row = conn.execute("SELECT id FROM users WHERE username = ?", (legacy,)).fetchone()
+                if row:
+                    uid = row["id"]
+                    conn.execute("DELETE FROM tokens WHERE user_id = ?", (uid,))
+                    conn.execute("DELETE FROM users WHERE id = ?", (uid,))
             conn.commit()
         finally:
             conn.close()
@@ -90,8 +96,8 @@ class AuthService:
             raise ValueError("用户名至少需要3个字符")
         if not password or len(password) < 6:
             raise ValueError("密码至少需要6位")
-        if role not in ("admin", "user"):
-            role = "user"
+        # 开放注册仅允许 user，禁止前端伪造 admin
+        role = "user"
 
         conn = self._connect()
         try:

@@ -59,7 +59,7 @@ def index():
 def health():
     return jsonify({
         "status": "ok",
-        "service": "reality-patch-agent",
+        "service": "remedy-agent",
         "memory": "central-users-db",
         "auth": "active",
         "database": get_database_url(None).split(":")[0].split("+")[0],
@@ -109,7 +109,7 @@ def auth_logout():
 @app.get("/v1/admin/users")
 @require_admin
 def admin_list_users():
-    """获取所有已注册用户列表及其个人画像统计概览。"""
+    """获取所有已注册用户列表及其个人画像统计概览（含人格雷达）"""
     users = auth_service.list_all_users()
     enriched = []
     for u in users:
@@ -119,6 +119,13 @@ def admin_list_users():
         total_m = stats["total_memories"] + stats_by_id["total_memories"]
         total_i = stats["total_interactions"] + stats_by_id["total_interactions"]
         merged_cats = {**stats.get("categories", {}), **stats_by_id.get("categories", {})}
+        # 人格雷达（供管理台直接渲染）
+        try:
+            prof = agent.get_personality_profile(u["username"])
+            scores = prof.get("scores") or {}
+            work = prof.get("work_style") or {}
+        except Exception:
+            scores, work = {}, {}
         enriched.append({
             "id": u["id"],
             "username": u["username"],
@@ -129,6 +136,11 @@ def admin_list_users():
                 "total_memories": total_m,
                 "total_interactions": total_i,
                 "categories": merged_cats,
+            },
+            "personality": {
+                "scores": scores,
+                "work_style": work,
+                "samples": prof.get("samples", 0) if 'prof' in locals() else 0,
             }
         })
     return jsonify({"users": enriched})
@@ -223,6 +235,48 @@ def forget_memory(user_id: str, memory_id: str):
         if user["role"] != "admin" and user["username"] != user_id and user["id"] != user_id:
             return jsonify({"error": "无权操作其他用户的记忆", "code": "FORBIDDEN"}), 403
     return jsonify({"success": agent.forget_memory(user_id, memory_id)})
+
+
+@app.get("/v1/admin/users/<user_id>/interactions")
+@require_admin
+def admin_user_interactions(user_id: str):
+    """管理员查询指定用户聊天内容，支持关键词、时间窗与分页，可删除/标注"""
+    q = request.args.get("q", "")
+    limit = int(request.args.get("limit", 20))
+    offset = int(request.args.get("offset", 0))
+    from_time = request.args.get("from")
+    to_time = request.args.get("to")
+    try:
+        result = agent.search_user_interactions(user_id, query=q, limit=limit, offset=offset, from_time=from_time, to_time=to_time)
+        return jsonify(result)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.delete("/v1/admin/interactions/<interaction_id>")
+@require_admin
+def admin_delete_interaction(interaction_id: str):
+    try:
+        ok = agent.delete_interaction(interaction_id)
+        return jsonify({"success": ok})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.post("/v1/admin/interactions/<interaction_id>/annotate")
+@require_admin
+def admin_annotate_interaction(interaction_id: str):
+    payload = request.get_json(silent=True) or {}
+    user = get_current_user()
+    # 标注需关联用户，优先取 payload 中的 user_id，否则取当前 admin 自身
+    target_user = str(payload.get("user_id") or payload.get("target_user") or g.current_user.get("username") or "admin")
+    tag = str(payload.get("tag") or "")
+    note = str(payload.get("note") or payload.get("content") or "")
+    try:
+        res = agent.annotate_interaction(target_user, interaction_id, tag=tag, note=note)
+        return jsonify(res)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
 # ----------------------------------------------------------------------
 # 知识库与项目秘书相关接口
 # ----------------------------------------------------------------------

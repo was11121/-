@@ -59,7 +59,7 @@ def create_llm_responder(
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {key}",
-            "User-Agent": "MyAgentUnified/1.0",
+            "User-Agent": "Remedy/1.0",
         }
 
         body = {

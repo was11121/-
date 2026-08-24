@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Remedy 管理台</title>
+  <link rel="icon" href="data:," />
+  <script src="/static/redesign/vendor/lucide.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="/static/redesign/admin.css" />
+  <style>
+    :root {
+      --bg: #f3f0e9;
+      --surface: #fbfaf6;
+      --surface-2: #ece8df;
+      --surface-3: #fffdf8;
+      --ink: #181c21;
+      --line: #dcd5c9;
+      --line-strong: #c6bdad;
+      --accent: #2c6b5d;
+      --accent-deep: #1d4f44;
+      --accent-soft: #e1ebe6;
+      --gold: #a67c2d;
+      --gold-soft: #f2e7cf;
+      --terra: #b3553c;
+      --terra-soft: #f4e2da;
+      --faint: #999184;
+      --muted: #746e63;
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: "Inter","PingFang SC",sans-serif; background: var(--bg); color: #282c30; }
+    .topbar { display:flex; align-items:center; justify-content:space-between; height:64px; padding:0 22px; background: rgba(251,250,246,0.92); border-bottom:1px solid var(--line); }
+    .brand { display:flex; align-items:center; gap:12px; }
+    .brand-mark { width:36px; height:36px; display:flex; align-items:center; justify-content:center; border-radius:8px; background: linear-gradient(145deg, var(--accent-deep), var(--accent)); color:#f0e3bd; }
+    .brand-copy strong { font-size:15px; }
+    .brand-copy span { font-size:10px; color:var(--faint); text-transform:uppercase; letter-spacing:0.08em; }
+    .main { max-width: 1440px; margin: 0 auto; padding: 24px; }
+    .panel { background: var(--surface); border:1px solid var(--line); border-radius:8px; padding:18px; margin-bottom:18px; }
+    .panel h2 { margin:0 0 12px; font-size:18px; }
+    .user-table { width:100%; border-collapse:collapse; font-size:13px; }
+    .user-table th { text-align:left; padding:10px; border-bottom:1px solid var(--line); background: var(--surface-2); }
+    .user-table td { padding:10px; border-bottom:1px solid var(--line); }
+    .user-table tr:hover { background: rgba(44,107,93,0.05); cursor:pointer; }
+    .user-table tr.active { background: var(--accent-soft); }
+    .radar-wrap { display:flex; gap:18px; align-items:flex-start; }
+    .radar-box { width:320px; height:320px; flex-shrink:0; }
+    .chat-list { display:flex; flex-direction:column; gap:10px; max-height:520px; overflow-y:auto; }
+    .chat-item { border:1px solid var(--line); border-radius:8px; padding:12px; background: var(--surface-3); }
+    .chat-item .meta { font-size:11px; color:var(--faint); display:flex; justify-content:space-between; }
+    .chat-item .msg { margin-top:6px; font-size:13px; white-space:pre-wrap; }
+    .chat-item .reply { margin-top:6px; font-size:13px; color:var(--accent-deep); background: var(--accent-soft); padding:8px; border-radius:6px; }
+    .actions { display:flex; gap:6px; margin-top:8px; }
+    .btn { padding:6px 12px; border:1px solid var(--line-strong); border-radius:6px; background: var(--surface); cursor:pointer; font-size:12px; }
+    .btn-danger { background: var(--terra); color:#fff; border-color:var(--terra); }
+    .btn:hover { border-color: var(--accent); }
+    .search-bar { display:flex; gap:8px; margin-bottom:12px; }
+    .search-bar input, .search-bar select { height:36px; padding:0 12px; border:1px solid var(--line-strong); border-radius:8px; }
+    .tag { display:inline-flex; padding:2px 8px; border-radius:999px; font-size:11px; background: var(--gold-soft); color:#805d18; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark"><i data-lucide="shield-check"></i></div>
+      <div class="brand-copy"><strong>Remedy</strong><span>Admin Console</span></div>
+    </div>
+    <div>
+      <a href="/redesign" class="btn">返回工作台</a>
+      <button class="btn" onclick="handleLogout()">退出</button>
+    </div>
+  </header>
+  <main class="main">
+    <div class="panel">
+      <h2>用户总览</h2>
+      <p style="color:var(--muted); font-size:12px;">点击用户查看人格雷达与聊天记录（仅 remedy_admin 可见）</p>
+      <table class="user-table" id="userTable">
+        <thead><tr><th>名字</th><th>账号</th><th>角色</th><th>记忆</th><th>对话</th><th>人格样本</th></tr></thead>
+        <tbody id="userTbody"><tr><td colspan="6">加载中...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="panel radar-wrap" id="radarPanel" style="display:none;">
+      <div class="radar-box"><canvas id="radarChart"></canvas></div>
+      <div style="flex:1;">
+        <h3 id="radarTitle">人格雷达</h3>
+        <p id="radarDesc" style="color:var(--muted); font-size:12px;"></p>
+        <div id="workStyle" style="margin-top:12px; font-size:12px;"></div>
+      </div>
+    </div>
+    <div class="panel" id="chatPanel" style="display:none;">
+      <h2>聊天记录</h2>
+      <div class="search-bar">
+        <input id="qInput" placeholder="关键词" style="flex:1;" />
+        <input id="fromInput" type="date" />
+        <input id="toInput" type="date" />
+        <button class="btn" onclick="loadChats()">搜索</button>
+      </div>
+      <div id="chatList" class="chat-list"><p style="color:var(--muted);">请选择用户</p></div>
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <button class="btn" onclick="loadChats(offset-Math.max(0,limit))">上一页</button>
+        <button class="btn" onclick="loadChats(offset+limit)">下一页</button>
+        <span id="pageInfo" style="font-size:12px; color:var(--muted);"></span>
+      </div>
+    </div>
+  </main>
+  <script src="/static/redesign/admin.js"></script>
+  <script>lucide.createIcons();</script>
+</body>
+</html>

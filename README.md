@@ -12,7 +12,7 @@
 
 ### 方式二：命令行运行
 ```powershell
-cd C:\Users\wby15\Desktop\文件\MyAgentUnified
+cd C:\Users\wby15\Desktop\文件\Remedy
 python app.py
 ```
 
@@ -33,8 +33,8 @@ python app.py
 - `adapters/`：Web/QQ 渠道适配说明和兼容层
 - `tools/`：数据迁移等运维脚本
 - `docs/ARCHITECTURE.md`：统一架构蓝图
-- `docs/MyAgentUnified-项目完全解读.docx`：面向零基础读者的完整说明
-- `docs/MyAgentUnified-前端控制台接口文档.docx`：控制台操作与 HTTP 接口映射
+- `docs/Remedy-项目完全解读.docx`：面向零基础读者的完整说明
+- `docs/Remedy-前端控制台接口文档.docx`：控制台操作与 HTTP 接口映射
 - `tests/`：核心闭环测试
 
 ## 数据库架构（集中库）

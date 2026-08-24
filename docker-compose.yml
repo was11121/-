@@ -1,4 +1,4 @@
-# MyAgentUnified 生产编排：app + PostgreSQL（集中库）+ 可选 searxng
+# Remedy 生产编排：app + PostgreSQL（集中库）+ 可选 searxng
 #
 # 快速开始（服务器 Linux）：
 #   1. 复制 .env.example 为 .env 并填写真实密钥
@@ -15,7 +15,7 @@ services:
       args:
         # 需要 BERT 人格（torch，镜像大）时改为 "1"
         WITH_AI: "0"
-    image: myagent-unified:latest
+    image: remedy:latest
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-8091}:8091"

@@ -257,7 +257,7 @@ class WebSearchService:
                 return {"content": "", "error": err.strip()[:200]}
             return {"content": out[:6000], "error": ""}
         try:
-            req = urllib.request.Request(target, headers={"User-Agent": "MyAgentUnified/1.0"})
+            req = urllib.request.Request(target, headers={"User-Agent": "Remedy/1.0"})
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                 content = resp.read().decode("utf-8", errors="replace")
             return {"content": content[:6000], "error": ""}
