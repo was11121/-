@@ -12,7 +12,12 @@ except ImportError:
     pass
 from auth_runtime import AuthService
 from storage.db import get_database_url
+from storage import runtime_settings
 from unified_agent import InteractionEnvelope, UnifiedAgent
+
+# 运行时配置优先于启动 env，支持前端热更新
+runtime_settings.apply_to_environ()
+
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 agent = UnifiedAgent()
 auth_service = AuthService()
@@ -55,16 +60,29 @@ def require_admin(f):
 @app.get("/")
 def index():
     return app.send_static_file("redesign/index.html")
+
+
+@app.get("/classic")
+def classic_index():
+    return app.send_static_file("index.html")
+
+
 @app.get("/health")
 def health():
+    personality_info = {}
+    encoder = getattr(agent.personality, "encoder", None)
+    if encoder is not None and hasattr(encoder, "info"):
+        personality_info = encoder.info()
     return jsonify({
         "status": "ok",
         "service": "remedy-agent",
         "memory": "central-users-db",
+        "memory_backend": getattr(agent, "memory_backend", "local"),
+        "web_backend": getattr(agent, "web_backend", "local"),
         "auth": "active",
         "database": get_database_url(None).split(":")[0].split("+")[0],
         "cognitive_engine": type(agent.cognitive).__name__,
-        "personality": agent.personality.encoder.info(),
+        "personality": personality_info,
     })
 # ----------------------------------------------------------------------
 # 认证与用户接口 (Auth Routes)
@@ -164,6 +182,140 @@ def admin_user_profile(target_user: str):
         "memories": memories,
         "personality": agent.get_personality_profile(target_user),
     })
+
+
+@app.get("/v1/admin/settings")
+@require_admin
+def admin_get_settings():
+    """读取当前生效的服务配置（密钥脱敏）。"""
+    settings = runtime_settings.effective()
+    web_info = {}
+    try:
+        web_info = agent.web_info()
+    except Exception as exc:  # noqa: BLE001
+        web_info = {"error": str(exc)}
+    return jsonify({
+        "settings": settings,
+        "runtime": {
+            "memory_backend": getattr(agent, "memory_backend", "local"),
+            "web_backend": getattr(agent, "web_backend", "local"),
+            "web_info": web_info,
+        },
+    })
+
+
+@app.put("/v1/admin/settings")
+@require_admin
+def admin_put_settings():
+    """保存服务配置并立即热更新生效。"""
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return jsonify({"error": "body must be an object"}), 400
+    runtime_settings.save_raw(payload)
+    runtime_settings.apply_to_environ()
+    applied = agent.apply_runtime_settings()
+    return jsonify({
+        "success": True,
+        "applied": applied,
+        "settings": runtime_settings.effective(),
+    })
+
+
+@app.post("/v1/admin/settings/test")
+@require_admin
+def admin_test_settings():
+    """测试指定服务连通性（不强制持久化）。"""
+    import urllib.error
+    import urllib.request
+
+    payload = request.get_json(silent=True) or {}
+    target = str(payload.get("target") or "").strip().lower()
+    overrides = payload.get("overrides") or {}
+    if not isinstance(overrides, dict):
+        overrides = {}
+
+    def _val(key: str, default: str = "") -> str:
+        if key in overrides and str(overrides.get(key) or "").strip() != "":
+            return str(overrides.get(key)).strip()
+        raw = runtime_settings.load_raw()
+        if key in raw and str(raw.get(key) or "").strip() != "":
+            return str(raw.get(key)).strip()
+        return os.getenv(key, default).strip()
+
+    try:
+        if target == "llm":
+            base = _val("BASE_URL", "https://api.deepseek.com").rstrip("/")
+            key = _val("MODEL_API_KEY")
+            model = _val("CURRENT_MODEL", "deepseek-v4-flash")
+            if not key:
+                return jsonify({"ok": False, "target": target, "error": "MODEL_API_KEY 未配置"}), 400
+            endpoint = f"{base}/v1/chat/completions" if not base.endswith("/v1") else f"{base}/chat/completions"
+            body = json.dumps({
+                "model": model,
+                "messages": [{"role": "user", "content": "ping"}],
+                "max_tokens": 8,
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                endpoint,
+                data=body,
+                method="POST",
+                headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"},
+            )
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                return jsonify({"ok": True, "target": target, "status": resp.status})
+
+        if target == "memory_mcp":
+            url = _val("MEMORY_MCP_URL", "http://127.0.0.1:8092").rstrip("/") + "/health"
+            req = urllib.request.Request(url, method="GET")
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                return jsonify({"ok": True, "target": target, "result": data})
+
+        if target == "web_mcp":
+            url = _val("WEB_MCP_URL", "http://127.0.0.1:8093").rstrip("/") + "/health"
+            req = urllib.request.Request(url, method="GET")
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                return jsonify({"ok": True, "target": target, "result": data})
+
+        if target == "searxng":
+            searx = _val("SEARXNG_URL", "http://localhost:8080/search")
+            sep = "&" if "?" in searx else "?"
+            url = f"{searx}{sep}q=ping&format=json"
+            req = urllib.request.Request(url, method="GET", headers={"Accept": "application/json"})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                return jsonify({"ok": True, "target": target, "status": resp.status})
+
+        if target == "tavily":
+            key = _val("TAVILY_API_KEY")
+            if not key:
+                return jsonify({"ok": False, "target": target, "error": "TAVILY_API_KEY 未配置"}), 400
+            body = json.dumps({"api_key": key, "query": "ping", "max_results": 1}).encode("utf-8")
+            req = urllib.request.Request(
+                "https://api.tavily.com/search",
+                data=body,
+                method="POST",
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                return jsonify({"ok": True, "target": target, "status": resp.status})
+
+        if target == "jina":
+            base = _val("JINA_READER_URL", "https://r.jina.ai").rstrip("/")
+            url = f"{base}/https://example.com"
+            req = urllib.request.Request(url, method="GET", headers={"Accept": "text/plain"})
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                text = resp.read().decode("utf-8", errors="replace")[:200]
+                return jsonify({"ok": True, "target": target, "status": resp.status, "preview": text})
+
+        return jsonify({"ok": False, "error": f"unsupported target: {target}"}), 400
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:300]
+        return jsonify({"ok": False, "target": target, "status": exc.code, "error": detail}), 200
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"ok": False, "target": target, "error": str(exc)}), 200
+
+
 # ----------------------------------------------------------------------
 # 智能交互与记忆操作 (支持用户身份严格绑定与普通用户隔离)
 # ----------------------------------------------------------------------
@@ -308,8 +460,37 @@ def library_search():
 # ----------------------------------------------------------------------
 
 @app.get("/v1/web/info")
+@require_admin
 def web_info():
+    """联网通道状态（仅管理员；返回脱敏信息，不含上游地址）。"""
     return jsonify(agent.web_info())
+
+
+# 对外隐藏上游通道名：把 searxng/tavily/jina 等具体服务名映射为中性标签，
+# 用户通过任何接口都看不到服务器使用的具体上游服务。
+_CHANNEL_LABELS = {
+    "searxng": "本地引擎",
+    "tavily": "在线引擎",
+    "tavily-relay": "中转引擎",
+    "none": "none",
+}
+_VIA_LABELS = {
+    "jina-direct": "网页解析",
+    "jina-relay": "网页解析(中转)",
+    "none": "none",
+}
+
+
+def _sanitize_web_payload(payload: dict) -> dict:
+    """把搜索/读页响应里的通道标识中性化，防止暴露上游服务名。"""
+    out = dict(payload or {})
+    if "channel" in out:
+        raw = str(out["channel"] or "").strip()
+        out["channel"] = _CHANNEL_LABELS.get(raw, raw)
+    if "via" in out:
+        raw = str(out["via"] or "").strip()
+        out["via"] = _VIA_LABELS.get(raw, raw or "网页解析")
+    return out
 
 
 @app.post("/v1/web/search")
@@ -321,7 +502,7 @@ def web_search_endpoint():
     limit = int(payload.get("limit") or 5)
     try:
         result = agent.web_search(query, limit=limit)
-        return jsonify(result)
+        return jsonify(_sanitize_web_payload(result))
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
@@ -334,7 +515,7 @@ def web_fetch_endpoint():
         return jsonify({"error": "url is required"}), 400
     try:
         result = agent.web_fetch(url)
-        return jsonify(result)
+        return jsonify(_sanitize_web_payload(result))
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
