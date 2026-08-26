@@ -121,9 +121,53 @@ function nextPage(){
   loadChats();
 }
 function escapeHtml(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+
+/* ----------------- 审计日志（Sprint 0.5） ----------------- */
+let auditOffset = 0;
+const AUDIT_PAGE_SIZE = 20;
+async function loadAudit(){
+  const action = (document.getElementById("auditActionInput").value || "").trim();
+  const target = (document.getElementById("auditTargetInput").value || "").trim();
+  let url = `/v1/admin/audit?limit=${AUDIT_PAGE_SIZE}&offset=${auditOffset}`;
+  if (action) url += `&action=${encodeURIComponent(action)}`;
+  if (target) url += `&target_user=${encodeURIComponent(target)}`;
+  const r = await fetch(url, {headers: authHeaders()});
+  const tbody = document.getElementById("auditTbody");
+  const pageInfo = document.getElementById("auditPageInfo");
+  if (!r.ok){ tbody.innerHTML = `<tr><td colspan="6">加载失败 ${r.status}</td></tr>`; pageInfo.textContent = "—"; return; }
+  const j = await r.json();
+  tbody.innerHTML = "";
+  if (!j.items || j.items.length === 0){
+    tbody.innerHTML = `<tr><td colspan="6" style="color:var(--muted)">暂无审计记录</td></tr>`;
+  } else {
+    j.items.forEach(it => {
+      const tr = document.createElement("tr");
+      const detailText = it.detail ? JSON.stringify(it.detail) : "";
+      tr.innerHTML = `
+        <td>${it.created_at || ""}</td>
+        <td><span class="tag">${escapeHtml(it.actor || "")}</span></td>
+        <td>${escapeHtml(it.action || "")}</td>
+        <td>${escapeHtml(it.target_user || "—")}</td>
+        <td style="font-family: var(--mono, monospace); font-size:11px;">${escapeHtml(it.target_id || "—")}</td>
+        <td style="font-size:11px; color:var(--muted); max-width:420px; word-break:break-all;">${escapeHtml(detailText)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+  pageInfo.textContent = `共 ${j.total} 条，当前偏移 ${j.offset}（每页 ${AUDIT_PAGE_SIZE}）`;
+}
+function auditPrevPage(){
+  auditOffset = Math.max(0, auditOffset - AUDIT_PAGE_SIZE);
+  loadAudit();
+}
+function auditNextPage(){
+  auditOffset = auditOffset + AUDIT_PAGE_SIZE;
+  loadAudit();
+}
 (function init(){
   token=localStorage.getItem("myagent_token") || localStorage.getItem("token") || "";
   if(!token){ location.href="/redesign"; return; }
   checkAdmin();
   loadUsers();
+  loadAudit();
 })();

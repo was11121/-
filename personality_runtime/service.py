@@ -49,7 +49,7 @@ class PersonalityService:
         self.root = self._data_dir / "users"
         self.root.mkdir(parents=True, exist_ok=True)
         init_db(self._data_dir)
-        self.encoder = encoder if encoder is not None else BertPersonalityEncoder(autoload=False)
+        self.encoder = encoder if encoder is not None else BertPersonalityEncoder(autoload=True)
 
     def user_dir(self, user_id: str | int | None) -> Path:
         path = self.root / _safe_id(user_id)
@@ -72,7 +72,7 @@ class PersonalityService:
             return self.get_profile(uid)
         with get_session(self._data_dir) as session:
             prior, samples, _backend = self._load_scores(session, uid)
-            bert_scores = self.encoder.score(text) if self.encoder.available else {}
+            bert_scores = self.encoder.score(text)
             heuristic = heuristic_scores(text, prior)
             if bert_scores:
                 # 中文文本 BERT 英文模型会偏弱，与启发式混合

@@ -218,3 +218,32 @@ class AuthService:
             return [dict(r) for r in rows]
         finally:
             conn.close()
+
+    def delete_user(self, user_id: str | None) -> bool:
+        """永久删除指定用户及其所有 token。返回是否删除成功。
+
+        出于安全设计，不允许删除唯一的管理员账号（防止全员被锁出）。
+        """
+        if not user_id:
+            return False
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT id, role FROM users WHERE id = ? OR username = ?",
+                (user_id, user_id),
+            ).fetchone()
+            if not row:
+                return False
+            if row["role"] == "admin":
+                admin_count = conn.execute(
+                    "SELECT COUNT(*) AS n FROM users WHERE role = 'admin'"
+                ).fetchone()["n"]
+                if admin_count <= 1:
+                    raise ValueError("无法删除唯一的管理员账号")
+            # 先吊销所有 token 再删用户（FK ON DELETE CASCADE 兜底）
+            conn.execute("DELETE FROM tokens WHERE user_id = ?", (row["id"],))
+            conn.execute("DELETE FROM users WHERE id = ?", (row["id"],))
+            conn.commit()
+            return True
+        finally:
+            conn.close()

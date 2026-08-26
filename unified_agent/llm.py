@@ -103,7 +103,7 @@ def create_llm_responder(
         # 默认降级格式
         if library_context:
             return f"我在知识库中为您检索到以下相关资料：\n\n{library_context}\n\n关于您的问题「{message}」，请参考上述内容。"
-        if user_context:
+        if "【长期用户记忆】" in user_context:
             return f"已结合您的个性化偏好进行处理：\n{user_context}\n\n针对您的问题「{message}」，我已收到并处理完成。"
         return f"我已收到您的消息：{message}"
 

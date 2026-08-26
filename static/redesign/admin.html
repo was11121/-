@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-SG">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -64,13 +64,13 @@
       <div class="brand-mark"><i data-lucide="shield-check"></i></div>
       <div class="brand-copy"><strong>Remedy</strong><span>Admin Console</span></div>
     </div>
-    <div>
+    <div style="display:flex; gap:8px; align-items:center;">
       <a href="/redesign" class="btn">返回工作台</a>
       <button class="btn" onclick="handleLogout()">退出</button>
     </div>
   </header>
   <main class="main">
-    <div class="panel">
+    <div class="panel" id="usersPanel">
       <h2>用户总览</h2>
       <p style="color:var(--muted); font-size:12px;">点击用户查看人格雷达与聊天记录（仅 remedy_admin 可见）</p>
       <table class="user-table" id="userTable">
@@ -99,6 +99,25 @@
         <button class="btn" onclick="prevPage()">上一页</button>
         <button class="btn" onclick="nextPage()">下一页</button>
         <span id="pageInfo" style="font-size:12px; color:var(--muted);"></span>
+      </div>
+    </div>
+
+    <div class="panel" id="auditPanel">
+      <h2>审计日志 <span style="font-size:12px; color:var(--muted); font-weight:400;">（记录管理员对用户的穿透操作）</span></h2>
+      <div class="search-bar">
+        <input id="auditActionInput" placeholder="按动作过滤（view_profile / search_interactions / delete_interaction / annotate_interaction / self_export）" style="flex:1;" />
+        <input id="auditTargetInput" placeholder="目标用户" />
+        <button class="btn" onclick="loadAudit()">刷新</button>
+      </div>
+      <table class="user-table">
+        <thead><tr><th>时间</th><th>操作者</th><th>动作</th><th>目标用户</th><th>目标 ID</th><th>详情</th></tr></thead>
+        <tbody id="auditTbody"><tr><td colspan="6">加载中...</td></tr></tbody>
+      </table>
+      <div style="display:flex; gap:8px; margin-top:12px; font-size:12px; color:var(--muted);">
+        <span id="auditPageInfo">—</span>
+        <span style="flex:1;"></span>
+        <button class="btn" onclick="auditPrevPage()">上一页</button>
+        <button class="btn" onclick="auditNextPage()">下一页</button>
       </div>
     </div>
   </main>

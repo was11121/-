@@ -211,6 +211,70 @@ class LocalLibrary:
             self._save_index(records)
         return changed
 
+    def _owned_by_user(self, item: dict[str, Any], user_id: str) -> bool:
+        uid = (user_id or "").strip()
+        if not uid:
+            return False
+        tags = item.get("tags") or []
+        if isinstance(tags, str):
+            tags = [t.strip() for t in tags.split(",") if t.strip()]
+        return uid in tags or f"user:{uid}" in tags or item.get("owner") == uid
+
+    def documents_for_user(self, user_id: str, *, include_untagged: bool = True) -> list[dict[str, Any]]:
+        records = self._load_index()
+        uid = (user_id or "").strip()
+        if not uid:
+            return records
+        out = []
+        for item in records:
+            tags = item.get("tags") or []
+            untagged = not tags
+            if self._owned_by_user(item, uid) or (include_untagged and untagged):
+                out.append(item)
+        return out
+
+    def delete_documents_for_user(self, user_id: str) -> int:
+        """硬删除带有该用户标签的文档。"""
+        uid = (user_id or "").strip()
+        if not uid:
+            return 0
+        records = self._load_index()
+        keep, removed = [], []
+        for item in records:
+            if self._owned_by_user(item, uid):
+                removed.append(item)
+            else:
+                keep.append(item)
+        if not removed:
+            return 0
+        self._save_index(keep)
+        for item in removed:
+            doc_id = item.get("document_id")
+            if not doc_id:
+                continue
+            doc_file = self.docs_path / f"{doc_id}.txt"
+            try:
+                if doc_file.exists():
+                    doc_file.unlink()
+            except OSError:
+                pass
+        return len(removed)
+
+    def delete_library_entry(self, document_id: str) -> bool:
+        """硬删除指定文档（Demo 清理使用）。"""
+        records = self._load_index()
+        keep = [item for item in records if item.get("document_id") != document_id]
+        if len(keep) == len(records):
+            return False
+        self._save_index(keep)
+        doc_file = self.docs_path / f"{document_id}.txt"
+        try:
+            if doc_file.exists():
+                doc_file.unlink()
+        except OSError:
+            pass
+        return True
+
     def correct_library_entry(self, document_id: str, correction: str) -> bool:
         records = self._load_index()
         for item in records:

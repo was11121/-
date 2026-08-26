@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from flask import Flask, Response, g, jsonify, request
 try:
@@ -14,6 +15,8 @@ from auth_runtime import AuthService
 from storage.db import get_database_url
 from storage import runtime_settings
 from unified_agent import InteractionEnvelope, UnifiedAgent
+from secretary_runtime import AdminAuditService
+from onboarding_runtime import OnboardingService
 
 # 运行时配置优先于启动 env，支持前端热更新
 runtime_settings.apply_to_environ()
@@ -21,6 +24,15 @@ runtime_settings.apply_to_environ()
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 agent = UnifiedAgent()
 auth_service = AuthService()
+admin_audit = AdminAuditService()
+onboarding = OnboardingService()
+
+
+def _utc_filename() -> str:
+    """生成文件名安全的时间戳（YYYYMMDDTHHMMSSZ）。"""
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
 def get_current_user() -> dict | None:
     """从请求头 Authorization: Bearer <token> 或 query 中解析当前登录用户。"""
     auth_header = request.headers.get("Authorization", "")
@@ -73,6 +85,11 @@ def health():
     encoder = getattr(agent.personality, "encoder", None)
     if encoder is not None and hasattr(encoder, "info"):
         personality_info = encoder.info()
+    llm_info = {}
+    try:
+        llm_info = agent.llm_info()
+    except Exception as exc:  # noqa: BLE001
+        llm_info = {"error": str(exc)}
     return jsonify({
         "status": "ok",
         "service": "remedy-agent",
@@ -83,6 +100,7 @@ def health():
         "database": get_database_url(None).split(":")[0].split("+")[0],
         "cognitive_engine": type(agent.cognitive).__name__,
         "personality": personality_info,
+        "llm": llm_info,
     })
 # ----------------------------------------------------------------------
 # 认证与用户接口 (Auth Routes)
@@ -121,6 +139,112 @@ def auth_logout():
     if token:
         auth_service.logout(token)
     return jsonify({"success": True})
+
+
+@app.get("/v1/me/export")
+@require_auth
+def me_export():
+    """导出当前登录用户的全部数据（JSON）。"""
+    user = g.current_user
+    payload = agent.export_user_data(user["username"])
+    payload["user"] = {
+        "id": user["id"],
+        "username": user["username"],
+        "nickname": user.get("nickname"),
+        "role": user.get("role"),
+        "created_at": user.get("created_at"),
+    }
+    # 仅追加 1 条审计记录，便于用户回溯自己何时导出过
+    try:
+        admin_audit.record(
+            actor=user["username"],
+            action="self_export",
+            target_user=user["username"],
+            detail={"payload_size_kb": round(len(json.dumps(payload, ensure_ascii=False)) / 1024, 1)},
+            ip=request.remote_addr or "",
+        )
+    except Exception:
+        pass
+    response = jsonify(payload)
+    response.headers["Content-Disposition"] = (
+        f'attachment; filename="remedy_export_{user["username"]}_{_utc_filename()}.json"'
+    )
+    return response
+
+
+# ----------------------------------------------------------------------
+# Demo Workspace 路由 (Sprint 1.1 / 1.2)
+# ----------------------------------------------------------------------
+
+@app.get("/v1/me/onboarding")
+@require_auth
+def me_onboarding_status():
+    """查看当前用户的引导状态：是否已注入 demo 等。"""
+    user = g.current_user
+    username = user["username"]
+    return jsonify({
+        "demo_seeded": onboarding.is_demo_seeded(username),
+        "user": {"username": username},
+    })
+
+
+@app.post("/v1/me/onboarding/seed-demo")
+@require_auth
+def me_onboarding_seed_demo():
+    """为当前用户注入 demo 数据。幂等：已注入则直接返回现状。"""
+    user = g.current_user
+    username = user["username"]
+    if onboarding.is_demo_seeded(username):
+        return jsonify({"success": True, "already_seeded": True})
+    try:
+        summary = onboarding.seed_demo(username, agent=agent)
+        return jsonify({"success": True, "summary": summary})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        app.logger.exception("seed_demo failed")
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.post("/v1/me/onboarding/clear-demo")
+@require_auth
+def me_onboarding_clear_demo():
+    """清空当前用户的 demo 数据（双重确认由前端 modal 实现）。"""
+    user = g.current_user
+    username = user["username"]
+    if not onboarding.is_demo_seeded(username):
+        return jsonify({"success": True, "already_cleared": True})
+    try:
+        counts = onboarding.clear_demo(username, agent=agent, auth_service=auth_service)
+        return jsonify({"success": True, "counts": counts})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        app.logger.exception("clear_demo failed")
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.delete("/v1/me")
+@require_auth
+def me_delete():
+    """永久删除当前登录用户及其全部数据（双重确认由前端实现）。"""
+    user = g.current_user
+    username = user["username"]
+    try:
+        # 先清理 demo 与全部数据
+        try:
+            onboarding.clear_demo(username, agent=agent, auth_service=auth_service)
+        except Exception:
+            pass
+        counts = agent.delete_user_data(username, extra_ids=[user.get("id")])
+        deleted = auth_service.delete_user(user["id"])
+    except ValueError as exc:
+        return jsonify({"error": str(exc), "code": "FORBIDDEN"}), 403
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+    if not deleted:
+        return jsonify({"error": "账号不存在或已删除"}), 404
+    return jsonify({"success": True, "username": username, "data_counts": counts})
 # ----------------------------------------------------------------------
 # 管理员专属接口 (Admin Routes - 个人画像穿透与统计)
 # ----------------------------------------------------------------------
@@ -175,6 +299,14 @@ def admin_user_profile(target_user: str):
             if u["username"] == target_user:
                 user_info = u
                 break
+    admin_audit.record(
+        actor=g.current_user["username"],
+        action="view_profile",
+        target_user=target_user,
+        target_id=target_user,
+        detail={"memories_count": len(memories)},
+        ip=request.remote_addr or "",
+    )
     return jsonify({
         "target_user": target_user,
         "user_info": user_info,
@@ -400,6 +532,13 @@ def admin_user_interactions(user_id: str):
     to_time = request.args.get("to")
     try:
         result = agent.search_user_interactions(user_id, query=q, limit=limit, offset=offset, from_time=from_time, to_time=to_time)
+        admin_audit.record(
+            actor=g.current_user["username"],
+            action="search_interactions",
+            target_user=user_id,
+            detail={"q": q, "limit": limit, "offset": offset, "from": from_time, "to": to_time, "total": result.get("total", 0)},
+            ip=request.remote_addr or "",
+        )
         return jsonify(result)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
@@ -410,6 +549,14 @@ def admin_user_interactions(user_id: str):
 def admin_delete_interaction(interaction_id: str):
     try:
         ok = agent.delete_interaction(interaction_id)
+        admin_audit.record(
+            actor=g.current_user["username"],
+            action="delete_interaction",
+            target_user="",
+            target_id=interaction_id,
+            detail={"ok": ok},
+            ip=request.remote_addr or "",
+        )
         return jsonify({"success": ok})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
@@ -426,29 +573,70 @@ def admin_annotate_interaction(interaction_id: str):
     note = str(payload.get("note") or payload.get("content") or "")
     try:
         res = agent.annotate_interaction(target_user, interaction_id, tag=tag, note=note)
+        admin_audit.record(
+            actor=g.current_user["username"],
+            action="annotate_interaction",
+            target_user=target_user,
+            target_id=interaction_id,
+            detail={"tag": tag, "note_len": len(note)},
+            ip=request.remote_addr or "",
+        )
         return jsonify(res)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
+
+
+@app.get("/v1/admin/audit")
+@require_admin
+def admin_audit_list():
+    """查询管理员审计日志（仅管理员可读）。"""
+    limit = int(request.args.get("limit", 50))
+    offset = int(request.args.get("offset", 0))
+    actor = request.args.get("actor", "")
+    action = request.args.get("action", "")
+    target_user = request.args.get("target_user", "")
+    return jsonify(admin_audit.list_events(
+        limit=min(limit, 200),
+        offset=max(offset, 0),
+        actor=actor,
+        action=action,
+        target_user=target_user,
+    ))
 # ----------------------------------------------------------------------
 # 知识库与项目秘书相关接口
 # ----------------------------------------------------------------------
 @app.post("/v1/library/documents")
 def library_documents():
     upload = request.files.get("file")
+    current = get_current_user()
+    owner_tag = f"user:{current['username']}" if current else None
     if upload:
         try:
-            return jsonify(agent.ingest_document(upload.filename or "uploaded_file", upload.read(), source=request.form.get("source", "upload")))
+            tags = [owner_tag] if owner_tag else None
+            return jsonify(agent.ingest_document(upload.filename or "uploaded_file", upload.read(), source=request.form.get("source", "upload"), tags=tags))
         except (ValueError, RuntimeError, Exception) as exc:
             return jsonify({"error": str(exc)}), 400
     payload = request.get_json(silent=True) or {}
     try:
         content = payload.get("content", "")
-        return jsonify(agent.ingest_document(str(payload.get("filename") or "document.txt"), content, source=str(payload.get("source") or "api"), tags=payload.get("tags")))
+        tags = list(payload.get("tags") or [])
+        if owner_tag and owner_tag not in tags:
+            tags.append(owner_tag)
+        return jsonify(agent.ingest_document(str(payload.get("filename") or "document.txt"), content, source=str(payload.get("source") or "api"), tags=tags or None))
     except (ValueError, RuntimeError, Exception) as exc:
         return jsonify({"error": str(exc)}), 400
 @app.get("/v1/library/documents")
 def library_list():
-    records = agent.library._load_index()
+    current = get_current_user()
+    if current and current.get("role") != "admin":
+        records = agent.library.documents_for_user(current["username"], include_untagged=False)
+        extra = agent.library.documents_for_user(current.get("id") or "", include_untagged=False)
+        seen = {r.get("document_id") for r in records}
+        for item in extra:
+            if item.get("document_id") not in seen:
+                records.append(item)
+    else:
+        records = agent.library._load_index()
     return jsonify({"documents": records})
 @app.get("/v1/library/search")
 def library_search():
@@ -521,40 +709,79 @@ def web_fetch_endpoint():
 
 
 @app.post("/v1/sync/<session_id>/confirm")
+@require_auth
 def sync_confirm(session_id: str):
-    payload = request.get_json(silent=True) or {}
-    user = get_current_user()
-    actor = user["username"] if user else str(payload.get("actor") or "default")
+    username = g.current_user["username"]
+    project_id = agent.secretary.get_sync_session_project(session_id)
+    if project_id is not None and not agent.secretary.can_access_project(project_id, username):
+        return jsonify({"error": "无权确认该同步草稿", "code": "FORBIDDEN"}), 403
     try:
-        return jsonify(agent.secretary.confirm_sync(session_id, actor))
+        return jsonify(agent.secretary.confirm_sync(session_id, username))
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 409
 @app.post("/v1/workspaces/<workspace_id>/sync")
+@require_auth
 def workspace_sync(workspace_id: str):
+    username = g.current_user["username"]
+    if not agent.secretary.can_access_project(workspace_id, username):
+        return jsonify({"error": "无权访问该工作区", "code": "FORBIDDEN"}), 403
     payload = request.get_json(silent=True) or {}
-    user = get_current_user()
-    actor = user["username"] if user else str(payload.get("actor") or "agent")
-    draft = agent.secretary.draft_sync(workspace_id, str(payload.get("text") or ""), actor)
+    draft = agent.secretary.draft_sync(workspace_id, str(payload.get("text") or ""), username)
     return jsonify(draft)
 @app.get("/v1/workspaces/<workspace_id>/dashboard")
+@require_auth
 def workspace_dashboard(workspace_id: str):
+    username = g.current_user["username"]
+    if not agent.secretary.can_access_project(workspace_id, username):
+        return jsonify({"error": "无权访问该工作区", "code": "FORBIDDEN"}), 403
     return jsonify(agent.secretary.dashboard(workspace_id))
-@app.post("/v1/patches/<patch_id>/confirm")
-def patch_confirm(patch_id: str):
+
+
+# --- Sprint 2.5: 多工作区列表 / 创建 ---
+@app.get("/v1/workspaces")
+@require_auth
+def workspaces_list():
+    """列出当前用户可见的工作区（owner 匹配 + 共享 default）。首次访问时会惰性创建 default。"""
+    username = g.current_user["username"]
+    agent.secretary.ensure_project("default", owner_user_id=username)
+    return jsonify({"workspaces": agent.secretary.list_projects_for_user(username)})
+
+
+@app.post("/v1/workspaces")
+@require_auth
+def workspaces_create():
+    """新建工作区，自动绑定到当前用户。"""
     payload = request.get_json(silent=True) or {}
-    user = get_current_user()
-    actor = user["username"] if user else str(payload.get("actor") or "default")
+    name = (payload.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "name is required"}), 400
+    if len(name) > 80:
+        return jsonify({"error": "name too long (max 80 chars)"}), 400
     try:
-        return jsonify(agent.confirm_patch(patch_id, actor))
+        ws = agent.secretary.create_project(name, g.current_user["username"])
+        return jsonify({"success": True, "workspace": ws})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+@app.post("/v1/patches/<patch_id>/confirm")
+@require_auth
+def patch_confirm(patch_id: str):
+    username = g.current_user["username"]
+    patch = agent.secretary.get_patch(patch_id)
+    if patch is not None and not agent.secretary.can_access_project(patch["project_id"], username):
+        return jsonify({"error": "无权操作该补丁", "code": "FORBIDDEN"}), 403
+    try:
+        return jsonify(agent.confirm_patch(patch_id, username))
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 409
 @app.post("/v1/patches/<patch_id>/rollback")
+@require_auth
 def patch_rollback(patch_id: str):
-    payload = request.get_json(silent=True) or {}
-    user = get_current_user()
-    actor = user["username"] if user else str(payload.get("actor") or "default")
+    username = g.current_user["username"]
+    patch = agent.secretary.get_patch(patch_id)
+    if patch is not None and not agent.secretary.can_access_project(patch["project_id"], username):
+        return jsonify({"error": "无权操作该补丁", "code": "FORBIDDEN"}), 403
     try:
-        return jsonify(agent.rollback_patch(patch_id, actor))
+        return jsonify(agent.rollback_patch(patch_id, username))
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 409
 @app.post("/qq")

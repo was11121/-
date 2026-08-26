@@ -7,6 +7,7 @@ import os
 import re
 import uuid
 from typing import Callable
+from datetime import datetime, timezone
 
 from cognitive_engine import load_cognitive_engine
 from library_runtime import LocalLibrary
@@ -23,6 +24,14 @@ try:
     from web_runtime.mcp_client import WebMcpClient  # type: ignore
 except Exception:  # pragma: no cover
     WebMcpClient = None  # type: ignore
+from storage.db import get_session
+from storage.models import (
+    FeedbackRow,
+    InteractionRow,
+    MemoryRow,
+    PersonalityObservationRow,
+    PersonalityProfileRow,
+)
 
 from .llm import create_llm_responder
 from .protocol import Citation, InteractionEnvelope, MemoryEvent, ResponseEnvelope, Tip
@@ -31,12 +40,16 @@ from .protocol import Citation, InteractionEnvelope, MemoryEvent, ResponseEnvelo
 Responder = Callable[[str, str, str], str]
 
 
+def _utcnow_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
 def _fallback_responder(message: str, user_context: str, library_context: str, web_context: str = "") -> str:
     if web_context:
         return f"以下是实时检索到的联网结果：\n\n{web_context}"
     if library_context:
         return f"我在图书馆里找到这些内容：\n\n{library_context}"
-    if user_context:
+    if "【长期用户记忆】" in user_context:
         return f"我会结合你之前留下的偏好继续处理。\n\n当前请求：{message}"
     return f"我已收到：{message}"
 
@@ -293,11 +306,190 @@ class UnifiedAgent:
     def web_info(self) -> dict:
         return self.web.info()
 
+    def llm_info(self) -> dict[str, Any]:
+        """暴露 LLM 状态供前端 banner 渲染。"""
+        from storage import runtime_settings as _rs
+        try:
+            raw = _rs.load_raw(self.data_dir)
+        except Exception:
+            raw = {}
+        configured = bool(
+            (raw.get("MODEL_API_KEY") or os.getenv("MODEL_API_KEY") or "").strip()
+        )
+        base = (
+            (raw.get("BASE_URL") or os.getenv("BASE_URL") or "https://api.deepseek.com").strip().rstrip("/")
+        )
+        model = (
+            (raw.get("CURRENT_MODEL") or os.getenv("CURRENT_MODEL") or "deepseek-v4-flash").strip()
+        )
+        return {
+            "configured": configured,
+            "base_url": base,
+            "model": model,
+            "mode": "llm" if configured else "fallback",
+        }
+
     def confirm_patch(self, patch_id: str, actor: str) -> dict:
         return self.secretary.confirm_patch(patch_id, actor)
 
     def rollback_patch(self, patch_id: str, actor: str) -> dict:
         return self.secretary.rollback_patch(patch_id, actor)
+
+    # ------------------------------------------------------------------
+    # 数据主权：导出 / 删除
+    # ------------------------------------------------------------------
+
+    def export_user_data(self, user_id: str) -> dict[str, Any]:
+        """导出单个用户的全部数据为 JSON 友好的字典（不含密钥与他人数据）。"""
+        uid = user_id
+        payload: dict[str, Any] = {
+            "exported_at": _utcnow_iso(),
+            "user": {"id": uid},
+            "memories": [],
+            "interactions": [],
+            "feedback": [],
+            "personality": {},
+            "library": [],
+            "secretary": {"tasks": [], "patches": [], "sync_sessions": [], "audits": []},
+        }
+        try:
+            with get_session(self.data_dir) as session:
+                mems = session.query(MemoryRow).filter(MemoryRow.user_id == uid).all()
+                payload["memories"] = [
+                    {
+                        "id": m.id,
+                        "category": m.category,
+                        "content": m.content,
+                        "confidence": m.confidence,
+                        "source": m.source,
+                        "evidence": m.evidence,
+                        "occurrence_count": m.occurrence_count,
+                        "status": m.status,
+                        "created_at": m.created_at,
+                        "last_seen_at": m.last_seen_at,
+                        "updated_at": m.updated_at,
+                    }
+                    for m in mems
+                ]
+                inters = session.query(InteractionRow).filter(InteractionRow.user_id == uid).all()
+                payload["interactions"] = [
+                    {
+                        "id": i.id,
+                        "message": i.message,
+                        "reply": i.reply,
+                        "source": i.source,
+                        "created_at": i.created_at,
+                    }
+                    for i in inters
+                ]
+                fbs = session.query(FeedbackRow).filter(FeedbackRow.user_id == uid).all()
+                payload["feedback"] = [
+                    {
+                        "id": f.id,
+                        "memory_id": f.memory_id,
+                        "feedback_type": f.feedback_type,
+                        "content": f.content,
+                        "created_at": f.created_at,
+                    }
+                    for f in fbs
+                ]
+                prof = session.query(PersonalityProfileRow).filter(PersonalityProfileRow.user_id == uid).one_or_none()
+                if prof:
+                    payload["personality"] = {
+                        "scores": json.loads(prof.scores_json or "{}"),
+                        "samples": prof.samples,
+                        "backend": prof.backend,
+                        "updated_at": prof.updated_at,
+                    }
+                obs = session.query(PersonalityObservationRow).filter(PersonalityObservationRow.user_id == uid).all()
+                payload["personality"]["observations"] = [
+                    {
+                        "id": o.id,
+                        "text": o.text,
+                        "scores": json.loads(o.scores_json or "{}"),
+                        "backend": o.backend,
+                        "created_at": o.created_at,
+                    }
+                    for o in obs
+                ]
+        except Exception:
+            pass
+        # 知识库：尝试以 username 命名的子目录导出元数据（不影响正文文件）
+        try:
+            docs = self.library._load_index()  # noqa: SLF001 - 复用内部索引导出
+            for doc in docs:
+                tags = doc.get("tags") or []
+                if isinstance(tags, str):
+                    tags = [t.strip() for t in tags.split(",") if t.strip()]
+                if uid in tags or f"user:{uid}" in tags or doc.get("owner") == uid:
+                    payload["library"].append({
+                        "id": doc.get("id"),
+                        "filename": doc.get("filename"),
+                        "title": doc.get("title"),
+                        "tags": tags,
+                        "ingested_at": doc.get("ingested_at"),
+                        "source": doc.get("source"),
+                    })
+        except Exception:
+            pass
+        # 秘书数据：秘书库是 SQLite + 单表结构，没有 user_id 字段；
+        # 我们以 owner 字段（创建者 / 操作者）来匹配用户
+        try:
+            dashboard = self.secretary.dashboard("default")
+            uid_lower = uid.lower()
+            for task in dashboard.get("tasks", []):
+                if (task.get("owner") or "").lower() == uid_lower:
+                    payload["secretary"]["tasks"].append(task)
+            for patch in dashboard.get("patches", []):
+                if (patch.get("created_by") or "").lower() == uid_lower or \
+                   (patch.get("confirmed_by") or "").lower() == uid_lower:
+                    payload["secretary"]["patches"].append(patch)
+            for audit in dashboard.get("audits", []):
+                if (audit.get("actor") or "").lower() == uid_lower:
+                    payload["secretary"]["audits"].append(audit)
+        except Exception:
+            pass
+        return payload
+
+    def delete_user_data(self, user_id: str, extra_ids: list[str] | None = None) -> dict[str, int]:
+        """删除指定用户在集中库、秘书库与知识库中的数据（不删 auth 账号本身）。"""
+        uids = [user_id] + [x for x in (extra_ids or []) if x and x != user_id]
+        counts = {
+            "memories": 0,
+            "interactions": 0,
+            "feedback": 0,
+            "personality_profiles": 0,
+            "personality_observations": 0,
+            "tasks": 0,
+            "patches": 0,
+            "audits": 0,
+            "projects": 0,
+            "documents": 0,
+        }
+        try:
+            with get_session(self.data_dir) as session:
+                for uid in uids:
+                    counts["memories"] += session.query(MemoryRow).filter(MemoryRow.user_id == uid).delete()
+                    counts["interactions"] += session.query(InteractionRow).filter(InteractionRow.user_id == uid).delete()
+                    counts["feedback"] += session.query(FeedbackRow).filter(FeedbackRow.user_id == uid).delete()
+                    counts["personality_profiles"] += session.query(PersonalityProfileRow).filter(PersonalityProfileRow.user_id == uid).delete()
+                    counts["personality_observations"] += session.query(PersonalityObservationRow).filter(PersonalityObservationRow.user_id == uid).delete()
+                session.commit()
+        except Exception:
+            pass
+        try:
+            for uid in uids:
+                sec = self.secretary.delete_user_owned_data(uid)
+                for key in ("tasks", "patches", "audits", "projects"):
+                    counts[key] += int(sec.get(key) or 0)
+        except Exception:
+            pass
+        try:
+            for uid in uids:
+                counts["documents"] += int(self.library.delete_documents_for_user(uid) or 0)
+        except Exception:
+            pass
+        return counts
 
     @staticmethod
     def _looks_like_library_request(message: str) -> bool:
