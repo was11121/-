@@ -667,6 +667,7 @@
               <div class="mem-actions">
                 <button class="btn btn-sm btn-icon" title="确认增强置信度" onclick="applyFeedback('${mem.id}', 'confirm')"><i data-lucide="thumbs-up"></i></button>
                 <button class="btn btn-sm btn-icon" title="拒绝标记为无效" onclick="applyFeedback('${mem.id}', 'reject')"><i data-lucide="thumbs-down"></i></button>
+                <button class="btn btn-sm btn-icon" title="编辑/纠正这条记忆" onclick="editMemory('${mem.id}', '${escapeHtml(mem.content).replace(/'/g, "&#39;")}')"><i data-lucide="pencil"></i></button>
                 <button class="btn btn-sm btn-icon" title="彻底遗忘并抹除证据链" onclick="forgetMemory('${mem.id}')"><i data-lucide="trash-2"></i></button>
               </div>
             </div>
@@ -694,6 +695,29 @@
           loadUserMemories();
         } else {
           toast('反馈提交失败：' + (data.error || '未知错误'), 'error');
+        }
+      } catch (err) {
+        toast('网络异常：' + err.message, 'error');
+      }
+    }
+
+    async function editMemory(memoryId, currentContent) {
+      const next = window.prompt('编辑这条记忆的内容：', currentContent || '');
+      if (next === null) return;
+      const trimmed = next.trim();
+      if (!trimmed || trimmed === currentContent) return;
+      try {
+        const resp = await fetch(`/v1/users/${encodeURIComponent(state.userId)}/memory/${encodeURIComponent(memoryId)}`, {
+          method: 'PATCH',
+          headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: trimmed })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+          toast('记忆已更新', 'success');
+          loadUserMemories();
+        } else {
+          toast('更新失败：' + (data.error || '未知错误'), 'error');
         }
       } catch (err) {
         toast('网络异常：' + err.message, 'error');

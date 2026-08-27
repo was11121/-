@@ -16,12 +16,42 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import jieba
 from sqlalchemy import func, select, update
 
 from storage.db import get_session, init_db
 from storage.models import FeedbackRow, InteractionRow, MemoryRow
 
 FEEDBACK_TYPES = {"confirm", "correct", "reject", "forget", "prefer_style", "change_preference", "annotate"}
+
+_SENTENCE_SPLIT = re.compile(r"[。！？!?\n]")
+
+
+def _sentence_containing(text: str, pos: int) -> str:
+    """返回包含 pos 位置的完整分句，用于判断该分句是否为疑问句。"""
+    start = 0
+    for m in _SENTENCE_SPLIT.finditer(text, 0, pos):
+        start = m.end()
+    end_match = _SENTENCE_SPLIT.search(text, pos)
+    end = end_match.end() if end_match else len(text)
+    return text[start:end]
+
+
+def _is_question(sentence: str) -> bool:
+    """粗略判断一个分句是否为疑问句（结尾问号，或以“吗/呢”收尾）。"""
+    s = sentence.strip()
+    if not s:
+        return False
+    if s[-1] in "？?":
+        return True
+    return bool(re.search(r"(吗|呢)[？?]?$", s))
+
+
+# 识别"以前喜欢A，现在喜欢B"这类偏好反转表达，用于把旧记忆标记为 superseded 而非无限追加
+_REVERSAL_RE = re.compile(
+    r"(?:以前|之前|曾经)(?:我)?(?:也)?(?:喜欢|讨厌|不喜欢)([^，,。！？.!?]{1,40})"
+    r"[，,]?\s*(?:现在|但现在|不过现在|如今)(?:我)?(?:更|也)?(?:喜欢|讨厌|不喜欢)([^，,。！？.!?]{1,40})"
+)
 
 
 def _now() -> str:
@@ -65,6 +95,8 @@ class MemoryService:
         result: list[dict[str, Any]] = []
         for category, confidence, pattern in specs:
             for match in re.finditer(pattern, text):
+                if _is_question(_sentence_containing(text, match.start())):
+                    continue
                 value = re.sub(r"\s+", " ", match.group(1)).strip(" ，。！？,.!?：:")
                 if value and len(value) >= 1:
                     result.append({"category": category, "content": value, "confidence": confidence, "source": source, "evidence": text})
@@ -89,8 +121,20 @@ class MemoryService:
             ))
             candidates = self.extract_memory_candidates(message, source)
             stored = [self._upsert(session, uid, item) for item in candidates]
+            for old_val, _new_val in (m.groups() for m in _REVERSAL_RE.finditer(message)):
+                old_val = re.sub(r"\s+", " ", old_val).strip(" ，。！？,.!?：:")
+                if old_val:
+                    self._supersede_by_content(session, uid, old_val)
             session.commit()
             return {"user_id": uid, "extracted": len(candidates), "stored": [item for item in stored if item]}
+
+    def _supersede_by_content(self, session, user_id: str, content: str) -> None:  # noqa: ANN001
+        """把与新记忆冲突的旧记忆标记为 superseded（不再参与检索/上下文），保留历史而不是直接删除。"""
+        session.execute(
+            update(MemoryRow)
+            .where(MemoryRow.user_id == user_id, MemoryRow.content == content, MemoryRow.status == "active")
+            .values(status="superseded", updated_at=_now())
+        )
 
     def _upsert(self, session, user_id: str, item: dict[str, Any]) -> dict[str, Any] | None:  # noqa: ANN001
         row = session.execute(
@@ -118,6 +162,18 @@ class MemoryService:
                 "occurrence_count": row.occurrence_count,
                 "status": row.status,
             }
+        if item["category"] == "identity":
+            # 身份是单值属性，新姓名出现时把其余仍标记为 active 的旧姓名记忆标为 superseded
+            session.execute(
+                update(MemoryRow)
+                .where(
+                    MemoryRow.user_id == user_id,
+                    MemoryRow.category == "identity",
+                    MemoryRow.status == "active",
+                    MemoryRow.content != item["content"],
+                )
+                .values(status="superseded", updated_at=now)
+            )
         memory_id = "mem_" + uuid.uuid4().hex[:12]
         memory_row = MemoryRow(
             id=memory_id,
@@ -159,22 +215,23 @@ class MemoryService:
                 ).scalars()
             ]
             raw_query = (query or "").strip().lower()
-            tokens = {token.lower() for token in re.findall(r"[\w\u4e00-\u9fff]{2,}", raw_query)}
+            # \u4e2d\u6587\u6ca1\u6709\u7a7a\u683c\u5206\u8bcd\uff0c\u539f\u5148\u7684\u6b63\u5219\u4f1a\u628a\u6574\u6bb5\u8fde\u7eed\u6c49\u5b57\u5f53\u6210\u4e00\u4e2a\u5927 token \u5bfc\u81f4\u6362\u4e2a\u95ee\u6cd5\u5c31\u68c0\u7d22\u4e0d\u5230\uff1b
+            # \u6539\u7528 jieba \u5206\u8bcd\u540e\u6309\u8bcd\u7c92\u5ea6\u53d6\u4ea4\u96c6\uff0c\u517c\u5bb9\u82f1\u6587/\u6570\u5b57 token \u7684\u573a\u666f\u3002
+            tokens = {t.strip() for t in jieba.lcut(raw_query) if t.strip() and not t.isspace()}
             if raw_query:
                 matched_rows = []
                 for row in rows:
                     content_lower = str(row.content or "").lower()
                     evidence_lower = str(row.evidence or "").lower()
+                    content_tokens = {t.strip() for t in jieba.lcut(content_lower) if t.strip()}
+                    evidence_tokens = {t.strip() for t in jieba.lcut(evidence_lower) if t.strip()}
                     hit_count = 0
                     if raw_query in content_lower:
                         hit_count += 3
                     elif raw_query in evidence_lower:
                         hit_count += 1
-                    for t in tokens:
-                        if t in content_lower:
-                            hit_count += 2
-                        elif t in evidence_lower:
-                            hit_count += 1
+                    hit_count += 2 * len(tokens & content_tokens)
+                    hit_count += 1 * len(tokens & evidence_tokens)
                     if hit_count > 0:
                         matched_rows.append((hit_count, row))
                 matched_rows.sort(
@@ -257,13 +314,48 @@ class MemoryService:
             session.commit()
             return bool(changed)
 
+    def memories_for_evidence(self, user_id: str, evidence: str) -> list[dict[str, Any]]:
+        """按原始来源语句查找由它抽取出的记忆，供"忘掉刚才说的"这类显式指令使用。"""
+        uid = _safe_id(user_id)
+        if not (evidence or "").strip():
+            return []
+        with get_session(self._data_dir) as session:
+            rows = session.execute(
+                select(MemoryRow).where(
+                    MemoryRow.user_id == uid, MemoryRow.evidence == evidence, MemoryRow.status == "active"
+                )
+            ).scalars().all()
+            return [self._to_dict(r) for r in rows]
+
+    def update_memory(self, user_id: str, memory_id: str, content: str) -> dict[str, Any] | None:
+        """允许用户在"记忆与画像"面板直接编辑/纠正一条记忆内容，而不必先遗忘再重新教一遍。"""
+        uid = _safe_id(user_id)
+        new_content = re.sub(r"\s+", " ", content or "").strip(" ，。！？,.!?：:")
+        if not new_content:
+            return None
+        with get_session(self._data_dir) as session:
+            row = session.execute(
+                select(MemoryRow).where(
+                    MemoryRow.id == memory_id, MemoryRow.user_id == uid, MemoryRow.status == "active"
+                )
+            ).scalar_one_or_none()
+            if not row:
+                return None
+            row.content = new_content
+            row.updated_at = _now()
+            session.commit()
+            return self._to_dict(row)
+
     # ---------- 上下文 / 快照 / 统计 ----------
     def build_user_context(self, user_id: str, query: str = "") -> str:
         memories = self.search_user_memory(user_id, query, limit=6)
         if not memories:
             return ""
         lines = ["【长期用户记忆】"]
-        lines.extend(f"- [{item['category']}] {item['content']}" for item in memories)
+        for item in memories:
+            date = str(item.get("last_seen_at") or "")[:10]
+            suffix = f"（记录于 {date}）" if date else ""
+            lines.append(f"- [{item['category']}] {item['content']}{suffix}")
         return "\n".join(lines)
 
     def recent_interactions(self, user_id: str, limit: int = 6) -> list[str]:

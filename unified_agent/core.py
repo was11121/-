@@ -173,7 +173,20 @@ class UnifiedAgent:
                 secretary_events.append({"type": "task_scaffold", "data": task_scaffold})
             requires_confirmation = True
 
-        content = self.responder(interaction.message, user_context, library_context, web_context)
+        if self._looks_like_identity_recall(interaction.message):
+            # 身份召回问句与教学语句字面重叠很少，关键词检索常常匹配不到；
+            # 直接按置信度取该用户的记忆记录，绕开大模型，避免检索落空或生成阶段编造。
+            recall_memories = self.memory.search_user_memory(interaction.user_id, "", limit=6)
+            content = self._deterministic_recall_reply(recall_memories)
+        elif self._looks_like_forget_recent(interaction.message):
+            content = self._forget_recent_reply(interaction.user_id)
+        elif self._looks_like_update_memory_request(interaction.message):
+            content = (
+                "好的，请直接告诉我要更新的内容，例如「我的名字应该是XX」或「我以前喜欢喝茶，"
+                "现在喜欢喝咖啡」，我会自动更新对应的长期记忆；你也可以到「记忆与画像」面板里直接编辑或删除某一条。"
+            )
+        else:
+            content = self.responder(interaction.message, user_context, library_context, web_context)
         memory_result = self.memory.record_interaction(interaction.user_id, interaction.message, content, source=interaction.channel)
         memory_events = [MemoryEvent("stored", item.get("id"), item.get("content", ""), float(item.get("confidence", 0)), item.get("category", "")) for item in memory_result.get("stored", [])]
         tip_list = self.tips.evaluate(interaction.user_id, interaction.message, self.memory.recent_interactions(interaction.user_id), risks=[])
@@ -290,6 +303,12 @@ class UnifiedAgent:
 
     def forget_memory(self, user_id: str, memory_id: str) -> bool:
         return self.memory.forget_memory(user_id, memory_id)
+
+    def update_memory(self, user_id: str, memory_id: str, content: str) -> dict | None:
+        updater = getattr(self.memory, "update_memory", None)
+        if not callable(updater):
+            return None
+        return updater(user_id, memory_id, content)
 
     def ingest_document(self, filename: str, content: bytes | str, source: str = "upload", tags: list[str] | None = None) -> dict:
         return self.library.ingest_document(filename, content, source=source, tags=tags)
@@ -502,3 +521,63 @@ class UnifiedAgent:
     @staticmethod
     def _looks_like_task(message: str) -> bool:
         return bool(re.search(r"(?:创建|新增|添加).{0,8}任务", message))
+
+    _IDENTITY_RECALL_RE = re.compile(r"(叫什么|我是谁|记得我|我的名字)")
+
+    @classmethod
+    def _looks_like_identity_recall(cls, message: str) -> bool:
+        """识别"你还记得我叫什么/喜欢什么吗"这类身份召回问句，用于绕开大模型直接从记忆库确定性作答，避免编造。"""
+        text = (message or "").strip()
+        if not text or not cls._IDENTITY_RECALL_RE.search(text):
+            return False
+        return text.endswith(("？", "?")) or "吗" in text
+
+    @staticmethod
+    def _deterministic_recall_reply(memories: list[dict]) -> str:
+        identity = ""
+        identity_date = ""
+        others: list[str] = []
+        for item in memories:
+            content = str(item.get("content") or "").strip()
+            if not content:
+                continue
+            if item.get("category") == "identity" and not identity:
+                identity = content
+                identity_date = str(item.get("last_seen_at") or "")[:10]
+            else:
+                others.append(content)
+        parts = []
+        if identity:
+            suffix = f"（{identity_date} 你告诉我的）" if identity_date else ""
+            parts.append(f"我记得你叫「{identity}」{suffix}。")
+        if others:
+            parts.append("另外你还提到过：" + "、".join(others[:4]) + "。")
+        if not parts:
+            return "抱歉，我目前还没有关于你的相关记忆记录，可以再告诉我一次吗？"
+        return "".join(parts)
+
+    _FORGET_RECENT_RE = re.compile(r"(?:忘掉|忘记)(?:我)?(?:刚才|刚刚|上一句|上一条|上次)")
+    _UPDATE_MEMORY_RE = re.compile(r"更新(?:一下)?(?:我的)?记忆")
+
+    @classmethod
+    def _looks_like_forget_recent(cls, message: str) -> bool:
+        """识别"忘掉刚才说的"这类显式遗忘指令，让用户能主动纠正被误记的内容。"""
+        return bool(cls._FORGET_RECENT_RE.search(message or ""))
+
+    @classmethod
+    def _looks_like_update_memory_request(cls, message: str) -> bool:
+        """识别"更新一下我的记忆"这类笼统的更新请求，引导用户用可解析的自然语言表达。"""
+        return bool(cls._UPDATE_MEMORY_RE.search(message or "")) and not cls._looks_like_forget_recent(message)
+
+    def _forget_recent_reply(self, user_id: str) -> str:
+        prev_messages = self.memory.recent_interactions(user_id, limit=1)
+        if not prev_messages:
+            return "上一条消息里我没有记录任何长期记忆，无需忘记。"
+        finder = getattr(self.memory, "memories_for_evidence", None)
+        if not callable(finder):
+            return "当前记忆后端暂不支持按上一条消息精确遗忘，你可以到「记忆与画像」面板手动删除对应记忆。"
+        candidates = finder(user_id, prev_messages[-1])
+        forgotten = sum(1 for m in candidates if self.memory.forget_memory(user_id, m["id"]))
+        if forgotten:
+            return f"好的，已经把你上一条消息里记录的 {forgotten} 条记忆忘掉了。"
+        return "上一条消息里我没有记录任何长期记忆，无需忘记。"

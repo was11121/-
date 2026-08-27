@@ -492,33 +492,49 @@ def feedback():
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
 @app.get("/v1/users/<user_id>/memory")
+@require_auth
 def user_memory(user_id: str):
     """查询指定用户记忆。普通用户只能查询自己；管理员可查询任意用户。"""
-    user = get_current_user()
-    if user:
-        # 普通用户越权访问他人记忆拦截
-        if user["role"] != "admin" and user["username"] != user_id and user["id"] != user_id:
-            return jsonify({"error": "无权查看其他用户的记忆画像", "code": "FORBIDDEN"}), 403
+    user = g.current_user
+    if user["role"] != "admin" and user["username"] != user_id and user["id"] != user_id:
+        return jsonify({"error": "无权查看其他用户的记忆画像", "code": "FORBIDDEN"}), 403
     return jsonify({"user_id": user_id, "memories": agent.search_user_memory(user_id, request.args.get("q", ""), int(request.args.get("limit", 20)))})
 
 
 @app.get("/v1/users/<user_id>/personality")
+@require_auth
 def user_personality(user_id: str):
     """查询用户大五人格督促档案。普通用户只能查自己；管理员可查任意用户。"""
-    user = get_current_user()
-    if user:
-        if user["role"] != "admin" and user["username"] != user_id and user["id"] != user_id:
-            return jsonify({"error": "无权查看其他用户的人格档案", "code": "FORBIDDEN"}), 403
+    user = g.current_user
+    if user["role"] != "admin" and user["username"] != user_id and user["id"] != user_id:
+        return jsonify({"error": "无权查看其他用户的人格档案", "code": "FORBIDDEN"}), 403
     return jsonify(agent.get_personality_profile(user_id))
 
 
 @app.post("/v1/users/<user_id>/memory/<memory_id>/forget")
+@require_auth
 def forget_memory(user_id: str, memory_id: str):
-    user = get_current_user()
-    if user:
-        if user["role"] != "admin" and user["username"] != user_id and user["id"] != user_id:
-            return jsonify({"error": "无权操作其他用户的记忆", "code": "FORBIDDEN"}), 403
+    user = g.current_user
+    if user["role"] != "admin" and user["username"] != user_id and user["id"] != user_id:
+        return jsonify({"error": "无权操作其他用户的记忆", "code": "FORBIDDEN"}), 403
     return jsonify({"success": agent.forget_memory(user_id, memory_id)})
+
+
+@app.patch("/v1/users/<user_id>/memory/<memory_id>")
+@require_auth
+def edit_memory(user_id: str, memory_id: str):
+    """允许用户在「记忆与画像」面板直接编辑/纠正一条记忆内容。"""
+    user = g.current_user
+    if user["role"] != "admin" and user["username"] != user_id and user["id"] != user_id:
+        return jsonify({"error": "无权操作其他用户的记忆", "code": "FORBIDDEN"}), 403
+    body = request.get_json(silent=True) or {}
+    content = str(body.get("content") or "").strip()
+    if not content:
+        return jsonify({"error": "content 不能为空", "code": "INVALID_INPUT"}), 400
+    updated = agent.update_memory(user_id, memory_id, content)
+    if not updated:
+        return jsonify({"error": "记忆不存在或已被遗忘", "code": "NOT_FOUND"}), 404
+    return jsonify({"memory": updated})
 
 
 @app.get("/v1/admin/users/<user_id>/interactions")
