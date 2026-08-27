@@ -125,6 +125,73 @@ class AuthService:
         finally:
             conn.close()
 
+    def guest_login(self, device_id: str, expires_hours: int = 168) -> dict[str, Any]:
+        """访客按设备 ID 登录：同一设备始终映射到同一个 guest 账号，实现免注册隔离。
+
+        - device_id 由前端生成并持久化在 localStorage；
+        - 服务端只保存其哈希派生的用户名（guest_<sha256[:12]>），不存原始设备信息；
+        - 首次调用自动建号（随机密码，不可用密码登录），之后复用同一账号与令牌。
+        """
+        device_id = (device_id or "").strip()
+        if (
+            len(device_id) < 8
+            or len(device_id) > 64
+            or not all(c.isalnum() or c in "-_" for c in device_id)
+        ):
+            raise ValueError("device_id 格式无效（应为 8-64 位字母/数字/连字符/下划线）")
+
+        digest = hashlib.sha256(device_id.encode("utf-8")).hexdigest()[:12]
+        username = f"guest_{digest}"
+        conn = self._connect()
+        try:
+            row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+            if not row:
+                uid = f"u_{username}"
+                # 随机密码：访客账号只能通过设备 ID 重新获取，不能密码登录
+                pwd_hash, salt = _hash_password(uuid.uuid4().hex + uuid.uuid4().hex)
+                now = _utc_now()
+                nickname = f"访客{digest[-4:].upper()}"
+                conn.execute(
+                    "INSERT INTO users VALUES (?, ?, ?, ?, 'user', ?, ?, ?)",
+                    (uid, username, pwd_hash, salt, nickname, now, now),
+                )
+                conn.commit()
+                row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+
+            # 复用未过期的令牌，避免每次访客进入都堆积 token
+            now_str = _utc_now()
+            tok = conn.execute(
+                "SELECT token, expires_at FROM tokens WHERE user_id = ? AND expires_at > ? "
+                "ORDER BY expires_at DESC LIMIT 1",
+                (row["id"], now_str),
+            ).fetchone()
+            if tok:
+                token = tok["token"]
+                expires_str = tok["expires_at"]
+            else:
+                token = "tok_" + uuid.uuid4().hex
+                expires_str = (datetime.now(timezone.utc) + timedelta(hours=expires_hours)).isoformat(timespec="seconds")
+                conn.execute(
+                    "INSERT INTO tokens VALUES (?, ?, ?, ?)",
+                    (token, row["id"], expires_str, now_str),
+                )
+                conn.commit()
+
+            return {
+                "token": token,
+                "expires_at": expires_str,
+                "is_guest": True,
+                "user": {
+                    "id": row["id"],
+                    "username": row["username"],
+                    "role": row["role"],
+                    "nickname": row["nickname"],
+                    "created_at": row["created_at"],
+                },
+            }
+        finally:
+            conn.close()
+
     def login(self, username: str, password: str, expires_hours: int = 72) -> dict[str, Any]:
         username = username.strip().lower()
         conn = self._connect()

@@ -9,6 +9,7 @@
   /* ============================== 2.1 / 2.2 Toast + 侧栏红点 ============================== */
 
   let _draftPatchesCache = [];   // 当前已知的 draft patches（用于 badge 持续显示）
+  let _blockedTasksCache = [];   // 当前已知的受阻任务（用于全局通知铃铛）
 
   /** 监听 secretary_events 中的 reality_patch，做即时反馈。 */
   function notifyPatchesCreated(count, patches) {
@@ -41,6 +42,7 @@
       const data = await resp.json();
       const drafts = (data.patches || []).filter(p => p.status === 'draft');
       _draftPatchesCache = drafts;
+      _blockedTasksCache = (data.tasks || []).filter(tk => tk.status === 'blocked');
       updateKanbanBadge();
     } catch (err) { /* ignore */ }
   }
@@ -55,7 +57,24 @@
   function updateKanbanBadge() {
     const badge = el('kanbanBadge');
     const count = _draftPatchesCache.length;
+    if (badge) {
+      if (count > 0) {
+        badge.textContent = count > 99 ? '99+' : String(count);
+        badge.classList.remove('hidden');
+      } else {
+        badge.textContent = '';
+        badge.classList.add('hidden');
+      }
+    }
+    updateNotificationBell();
+  }
+
+  /* ============================== 全局通知铃铛（跨 Tab 聚合待处理事项） ============================== */
+
+  function updateNotificationBell() {
+    const badge = el('notifBellBadge');
     if (!badge) return;
+    const count = _draftPatchesCache.length + _blockedTasksCache.length;
     if (count > 0) {
       badge.textContent = count > 99 ? '99+' : String(count);
       badge.classList.remove('hidden');
@@ -63,6 +82,51 @@
       badge.textContent = '';
       badge.classList.add('hidden');
     }
+  }
+
+  function setBlockedTasksCache(arr) {
+    _blockedTasksCache = arr || [];
+    updateNotificationBell();
+  }
+
+  function renderNotificationList() {
+    const list = el('notifList');
+    if (!list) return;
+    const items = [];
+    _draftPatchesCache.forEach(p => {
+      const change = typeof p.proposed_change === 'string' ? p.proposed_change : JSON.stringify(p.proposed_change || '');
+      const label = `${p.target_type || ''} ${p.operation || ''} → ${change}`.trim();
+      items.push(`<button class="notif-item" onclick="window.switchTab && switchTab('kanban'); window.hideNotificationPopover && hideNotificationPopover();">
+        <span class="tag tag-gold">待确认补丁</span><span>${escapeNotifHtml(label || p.id || '')}</span>
+      </button>`);
+    });
+    _blockedTasksCache.forEach(task => {
+      items.push(`<button class="notif-item" onclick="window.switchTab && switchTab('kanban'); window.hideNotificationPopover && hideNotificationPopover();">
+        <span class="tag tag-terra">受阻任务</span><span>${escapeNotifHtml(task.title || task.id || '')}</span>
+      </button>`);
+    });
+    list.innerHTML = items.length ? items.join('') : '<p class="empty">暂无待处理事项</p>';
+    refreshIcons();
+  }
+
+  function escapeNotifHtml(str) {
+    return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').slice(0, 60);
+  }
+
+  function toggleNotificationPopover() {
+    const panel = el('notifPanel');
+    if (!panel) return;
+    if (panel.classList.contains('hidden')) {
+      renderNotificationList();
+      panel.classList.remove('hidden');
+    } else {
+      panel.classList.add('hidden');
+    }
+  }
+
+  function hideNotificationPopover() {
+    const panel = el('notifPanel');
+    if (panel) panel.classList.add('hidden');
   }
 
   /* ============================== 2.3 影响预览 diff 弹窗 ============================== */
@@ -380,6 +444,9 @@
   window.notifyPatchesCreated = notifyPatchesCreated;
   window.refreshKanbanBadge = refreshKanbanBadge;
   window.updateKanbanBadge = updateKanbanBadge;
+  window.setBlockedTasksCache = setBlockedTasksCache;
+  window.toggleNotificationPopover = toggleNotificationPopover;
+  window.hideNotificationPopover = hideNotificationPopover;
   window.openPatchDiff = openPatchDiff;
   window.toggleWorkspaceDropdown = toggleWorkspaceDropdown;
   window.switchWorkspace = switchWorkspace;
@@ -397,5 +464,12 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     refreshKanbanBadge();
+    document.addEventListener('click', (ev) => {
+      const panel = el('notifPanel');
+      const bell = el('notifBell');
+      if (!panel || panel.classList.contains('hidden')) return;
+      if (panel.contains(ev.target) || (bell && bell.contains(ev.target))) return;
+      panel.classList.add('hidden');
+    });
   });
 })();

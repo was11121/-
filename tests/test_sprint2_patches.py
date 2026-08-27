@@ -39,11 +39,13 @@ class Sprint2PatchesTests(unittest.TestCase):
     # ---------- 2.5 工作区列表 / 创建 ----------
 
     def test_list_workspaces_includes_default(self):
-        headers, _ = self._register_login("ws_user_a", "secret1")
+        headers, user = self._register_login("ws_user_a", "secret1")
         resp = self.client.get("/v1/workspaces", headers=headers)
         self.assertEqual(resp.status_code, 200)
         ids = {w["id"] for w in resp.json["workspaces"]}
-        self.assertIn("default", ids)
+        # default 不再全局共享：用户可见的是自己的 default::<username> 工作区
+        self.assertIn(f"default::{user['username']}", ids)
+        self.assertNotIn("default", ids, "旧全局共享 default 不应再出现在普通用户列表中")
 
     def test_create_workspace_assigns_owner(self):
         headers, user = self._register_login("ws_owner_a", "secret1")

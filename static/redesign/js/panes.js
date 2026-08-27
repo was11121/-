@@ -362,6 +362,7 @@
         const data = await resp.json();
         // 同步给 patches.js 缓存与红点（Sprint 2.1/2.2/2.4/2.6）
         if (typeof window.setPatchesCache === 'function') window.setPatchesCache(data.patches || []);
+        if (typeof window.setBlockedTasksCache === 'function') window.setBlockedTasksCache((data.tasks || []).filter(tk => tk.status === 'blocked'));
         if (typeof window.updateKanbanBadge === 'function') {
           window.updateKanbanBadge();
         }
@@ -1032,6 +1033,7 @@
       checkHealth();
       restoreSession();
       updateMemoryIndicator();
+      initTheme();
       refreshIcons();
     });
   

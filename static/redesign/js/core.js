@@ -11,6 +11,121 @@
       memoryCorrected: 0,
     };
 
+    /* ----------- 深色/浅色主题 ----------- */
+    function currentTheme() {
+      const explicit = document.documentElement.getAttribute('data-theme');
+      return explicit === 'light' ? 'light' : 'dark';
+    }
+
+    function applyThemeIcon() {
+      const icon = el('themeToggleIcon');
+      if (!icon) return;
+      icon.setAttribute('data-lucide', currentTheme() === 'dark' ? 'sun' : 'moon');
+      refreshIcons();
+    }
+
+    function initTheme() {
+      applyThemeIcon();
+    }
+
+    function toggleTheme() {
+      const next = currentTheme() === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      try { localStorage.setItem('remedy_theme', next); } catch (e) { /* ignore */ }
+      applyThemeIcon();
+    }
+
+    /* ----------- 主界面数字流背景 ----------- */
+    function initMainBgRain() {
+      const canvas = document.getElementById('mainBgRain');
+      if (!canvas || !canvas.getContext) return;
+      const ctx = canvas.getContext('2d');
+      const container = canvas.parentElement;
+      const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const glyphs = '01#*<>%/'.split('');
+      const fontSize = 15;
+      const rowH = fontSize * 1.6;
+      const trailLen = 7;
+      let cols = 0;
+      let drops = [];
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      let running = false;
+      let rafId = null;
+      let lastStep = 0;
+
+      function resize() {
+        const w = container.clientWidth;
+        const h = container.clientHeight;
+        if (!w || !h) return;
+        canvas.width = Math.round(w * dpr);
+        canvas.height = Math.round(h * dpr);
+        canvas.style.width = w + 'px';
+        canvas.style.height = h + 'px';
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        cols = Math.max(1, Math.floor(w / fontSize));
+        drops = new Array(cols).fill(0).map(() => -Math.floor(Math.random() * 30));
+        ctx.clearRect(0, 0, w, h);
+      }
+
+      function drawFrame() {
+        const w = container.clientWidth;
+        const h = container.clientHeight;
+        ctx.clearRect(0, 0, w, h);
+        ctx.font = fontSize + 'px "JetBrains Mono", Consolas, monospace';
+        for (let i = 0; i < cols; i++) {
+          const headY = drops[i];
+          for (let t = 0; t < trailLen; t++) {
+            const y = (headY - t) * rowH;
+            if (y < 0 || y > h) continue;
+            const alpha = 0.42 * (1 - t / trailLen);
+            ctx.fillStyle = t === 0 ? `rgba(240, 214, 235, ${alpha + 0.15})` : `rgba(196, 130, 200, ${alpha})`;
+            ctx.fillText(glyphs[(Math.random() * glyphs.length) | 0], i * fontSize, y);
+          }
+        }
+      }
+
+      function step(ts) {
+        if (!running) return;
+        if (ts - lastStep > 80) {
+          lastStep = ts;
+          drawFrame();
+          for (let i = 0; i < cols; i++) {
+            drops[i]++;
+            if ((drops[i] - trailLen) * rowH > container.clientHeight && Math.random() > 0.98) {
+              drops[i] = -Math.floor(Math.random() * 20);
+            }
+          }
+        }
+        rafId = requestAnimationFrame(step);
+      }
+
+      function start() {
+        if (running) return;
+        resize();
+        if (reduceMotion) { drawFrame(); return; }
+        running = true;
+        lastStep = 0;
+        rafId = requestAnimationFrame(step);
+      }
+
+      function stop() {
+        running = false;
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+
+      function syncWithTheme() {
+        if (currentTheme() === 'dark' && !document.hidden) start(); else stop();
+      }
+
+      window.addEventListener('resize', () => { if (currentTheme() === 'dark') resize(); });
+      document.addEventListener('visibilitychange', syncWithTheme);
+      new MutationObserver(syncWithTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+      syncWithTheme();
+    }
+    document.addEventListener('DOMContentLoaded', initMainBgRain);
+
     function el(id) { return document.getElementById(id); }
     function showEl(id) { const node = el(id); if (node) node.classList.remove('hidden'); }
     function hideEl(id) { const node = el(id); if (node) node.classList.add('hidden'); }
@@ -36,7 +151,7 @@
           url = '';
         }
         // /health 与 /v1/auth/* 不参与登录态拦截，避免登录前循环
-        const isAuthFree = url.startsWith('/health') || url.startsWith('/v1/auth/login') || url.startsWith('/v1/auth/register');
+        const isAuthFree = url.startsWith('/health') || url.startsWith('/v1/auth/login') || url.startsWith('/v1/auth/register') || url.startsWith('/v1/auth/guest');
         let resp;
         try {
           resp = await original(input, init);
@@ -158,6 +273,48 @@
       node.textContent = msg;
       node.classList.remove('hidden');
     }
+
+    /* ----------- 封面统计数字 count-up ----------- */
+    function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
+    function animateCoverStat(node, i) {
+      const target = parseFloat(node.dataset.target);
+      const suffix = node.dataset.suffix || '';
+      const decimals = parseInt(node.dataset.decimals, 10) || 0;
+      const duration = 1500 + i * 80;
+      const startDelay = 480 + i * 90;
+      const start = performance.now() + startDelay;
+      function tick(now) {
+        const elapsed = now - start;
+        if (elapsed < 0) { requestAnimationFrame(tick); return; }
+        const progress = Math.min(1, elapsed / duration);
+        const value = target * easeOutCubic(progress);
+        node.textContent = value.toFixed(decimals) + suffix;
+        if (progress < 1) requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    }
+
+    function initCoverStats() {
+      const nodes = document.querySelectorAll('.cover-stat-value');
+      if (!nodes.length) return;
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        nodes.forEach((node) => {
+          const decimals = parseInt(node.dataset.decimals, 10) || 0;
+          node.textContent = parseFloat(node.dataset.target).toFixed(decimals) + (node.dataset.suffix || '');
+        });
+        return;
+      }
+      let done = false;
+      const observer = new IntersectionObserver((entries) => {
+        if (done || !entries.some((e) => e.isIntersecting)) return;
+        done = true;
+        nodes.forEach((node, i) => animateCoverStat(node, i));
+        observer.disconnect();
+      }, { threshold: 0.25 });
+      observer.observe(nodes[0].closest('.cover-stats'));
+    }
+    document.addEventListener('DOMContentLoaded', initCoverStats);
 
     async function readJson(resp) {
       const text = await resp.text();
@@ -370,12 +527,32 @@
       hideAccountMenu();
     });
 
-    function enterAsGuest() {
-      state.userId = 'guest';
-      hideEl('authOverlay');
-      updateMemoryUser();
-      switchTab('overview');
-      toast('已进入访客模式');
+    function getDeviceId() {
+      let deviceId = localStorage.getItem('remedy_device_id');
+      if (!deviceId) {
+        deviceId = (crypto && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : ('dev-' + Date.now() + '-' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2));
+        localStorage.setItem('remedy_device_id', deviceId);
+      }
+      return deviceId;
+    }
+
+    async function enterAsGuest() {
+      // 访客模式：按设备 ID 自动创建/复用独立账号，实现免注册数据隔离
+      try {
+        const resp = await fetch('/v1/auth/guest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ device_id: getDeviceId() })
+        });
+        const data = await readJson(resp);
+        if (!resp.ok) { showAuthError(data.error || '访客登录失败'); return; }
+        applySession(data.token, data.user);
+        toast('已进入访客模式（数据按设备隔离）');
+      } catch (err) {
+        showAuthError(err.message);
+      }
     }
 
     async function restoreSession() {

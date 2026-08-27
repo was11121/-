@@ -126,6 +126,16 @@ def auth_login():
         return jsonify(res)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
+@app.post("/v1/auth/guest")
+def auth_guest():
+    """访客按设备 ID 免注册登录：同一设备映射同一 guest 账号，数据按设备隔离。"""
+    payload = request.get_json(silent=True) or {}
+    device_id = str(payload.get("device_id") or payload.get("deviceId") or "")
+    try:
+        res = auth_service.guest_login(device_id)
+        return jsonify(res)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
 @app.get("/v1/auth/me")
 @require_auth
 def auth_me():
@@ -724,12 +734,30 @@ def web_fetch_endpoint():
         return jsonify({"error": str(exc)}), 500
 
 
+def _can_access_workspace(workspace_id: str, username: str, role: str) -> bool:
+    """工作区访问判定：管理员放行（便于穿透审计），其余按 owner 规则。"""
+    if role == "admin":
+        return True
+    return agent.secretary.can_access_project(workspace_id, username)
+
+
+def _resolve_user_workspace(workspace_id: str) -> str:
+    """把前端传入的 default 解析为当前用户的独立工作区（default::<username>）。"""
+    username = g.current_user["username"]
+    ws = (workspace_id or "default").strip() or "default"
+    if ws == "default":
+        ws = agent.secretary.default_project_id(username)
+    agent.secretary.ensure_project(ws, name="我的工作区", owner_user_id=username)
+    return ws
+
+
 @app.post("/v1/sync/<session_id>/confirm")
 @require_auth
 def sync_confirm(session_id: str):
     username = g.current_user["username"]
+    role = g.current_user.get("role", "user")
     project_id = agent.secretary.get_sync_session_project(session_id)
-    if project_id is not None and not agent.secretary.can_access_project(project_id, username):
+    if project_id is not None and not _can_access_workspace(project_id, username, role):
         return jsonify({"error": "无权确认该同步草稿", "code": "FORBIDDEN"}), 403
     try:
         return jsonify(agent.secretary.confirm_sync(session_id, username))
@@ -739,27 +767,33 @@ def sync_confirm(session_id: str):
 @require_auth
 def workspace_sync(workspace_id: str):
     username = g.current_user["username"]
-    if not agent.secretary.can_access_project(workspace_id, username):
+    role = g.current_user.get("role", "user")
+    ws = _resolve_user_workspace(workspace_id)
+    if not _can_access_workspace(ws, username, role):
         return jsonify({"error": "无权访问该工作区", "code": "FORBIDDEN"}), 403
     payload = request.get_json(silent=True) or {}
-    draft = agent.secretary.draft_sync(workspace_id, str(payload.get("text") or ""), username)
+    draft = agent.secretary.draft_sync(ws, str(payload.get("text") or ""), username)
     return jsonify(draft)
 @app.get("/v1/workspaces/<workspace_id>/dashboard")
 @require_auth
 def workspace_dashboard(workspace_id: str):
     username = g.current_user["username"]
-    if not agent.secretary.can_access_project(workspace_id, username):
+    role = g.current_user.get("role", "user")
+    ws = _resolve_user_workspace(workspace_id)
+    if not _can_access_workspace(ws, username, role):
         return jsonify({"error": "无权访问该工作区", "code": "FORBIDDEN"}), 403
-    return jsonify(agent.secretary.dashboard(workspace_id))
+    return jsonify(agent.secretary.dashboard(ws))
 
 
 # --- Sprint 2.5: 多工作区列表 / 创建 ---
 @app.get("/v1/workspaces")
 @require_auth
 def workspaces_list():
-    """列出当前用户可见的工作区（owner 匹配 + 共享 default）。首次访问时会惰性创建 default。"""
+    """列出当前用户可见的工作区（本人拥有的 + 遗留无主命名工作区）。首次访问时会惰性创建本人 default。"""
     username = g.current_user["username"]
-    agent.secretary.ensure_project("default", owner_user_id=username)
+    agent.secretary.ensure_project(
+        agent.secretary.default_project_id(username), name="我的工作区", owner_user_id=username
+    )
     return jsonify({"workspaces": agent.secretary.list_projects_for_user(username)})
 
 
@@ -778,13 +812,26 @@ def workspaces_create():
         return jsonify({"success": True, "workspace": ws})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
+def _can_touch_patch(patch: dict | None, username: str, role: str) -> tuple[bool, str]:
+    """补丁操作归属校验：创建者本人或管理员可操作；工作区访问规则同时生效。"""
+    if patch is None:
+        return True, ""
+    if role == "admin":
+        return True, ""
+    if str(patch.get("created_by") or "").strip().lower() != username.strip().lower():
+        return False, "只能操作自己创建的补丁"
+    if not _can_access_workspace(str(patch.get("project_id") or ""), username, role):
+        return False, "无权操作该补丁"
+    return True, ""
+
 @app.post("/v1/patches/<patch_id>/confirm")
 @require_auth
 def patch_confirm(patch_id: str):
     username = g.current_user["username"]
-    patch = agent.secretary.get_patch(patch_id)
-    if patch is not None and not agent.secretary.can_access_project(patch["project_id"], username):
-        return jsonify({"error": "无权操作该补丁", "code": "FORBIDDEN"}), 403
+    role = g.current_user.get("role", "user")
+    ok, reason = _can_touch_patch(agent.secretary.get_patch(patch_id), username, role)
+    if not ok:
+        return jsonify({"error": reason, "code": "FORBIDDEN"}), 403
     try:
         return jsonify(agent.confirm_patch(patch_id, username))
     except ValueError as exc:
@@ -793,9 +840,10 @@ def patch_confirm(patch_id: str):
 @require_auth
 def patch_rollback(patch_id: str):
     username = g.current_user["username"]
-    patch = agent.secretary.get_patch(patch_id)
-    if patch is not None and not agent.secretary.can_access_project(patch["project_id"], username):
-        return jsonify({"error": "无权操作该补丁", "code": "FORBIDDEN"}), 403
+    role = g.current_user.get("role", "user")
+    ok, reason = _can_touch_patch(agent.secretary.get_patch(patch_id), username, role)
+    if not ok:
+        return jsonify({"error": reason, "code": "FORBIDDEN"}), 403
     try:
         return jsonify(agent.rollback_patch(patch_id, username))
     except ValueError as exc:

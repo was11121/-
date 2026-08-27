@@ -52,43 +52,55 @@ class SecretaryService:
         try:
             row = conn.execute("SELECT * FROM projects WHERE id=?", (project_id,)).fetchone()
             if not row:
-                owner = None if project_id == "default" else owner_user_id
                 conn.execute(
                     "INSERT INTO projects VALUES (?, ?, ?, ?)",
-                    (project_id, name, _now(), owner),
+                    (project_id, name, _now(), owner_user_id),
                 )
                 conn.commit()
                 row = conn.execute("SELECT * FROM projects WHERE id=?", (project_id,)).fetchone()
-            elif project_id == "default" and row["owner_user_id"]:
-                conn.execute("UPDATE projects SET owner_user_id = NULL WHERE id = ?", (project_id,))
+            elif owner_user_id and not row["owner_user_id"] and project_id.startswith("default::"):
+                # 补齐每用户 default 工作区的归属
+                conn.execute("UPDATE projects SET owner_user_id = ? WHERE id = ?", (owner_user_id, project_id))
                 conn.commit()
                 row = conn.execute("SELECT * FROM projects WHERE id=?", (project_id,)).fetchone()
             return dict(row)
         finally:
             conn.close()
 
+    @staticmethod
+    def default_project_id(user_id: str) -> str:
+        """每用户独立的默认工作区 ID（不再全局共享）。"""
+        return f"default::{(user_id or 'anon').strip().lower()}"
+
     def can_access_project(self, project_id: str, user_id: str) -> bool:
-        """判断 user_id 是否有权访问 project_id：共享 default、无 owner、或 owner 匹配。"""
+        """判断 user_id 是否有权访问 project_id：owner 匹配、遗留无主命名工作区、或本人 default。
+
+        注意：旧的全局共享 default 工作区已废弃，任何用户都无法再通过该入口访问共享数据。
+        """
         conn = self._conn()
         try:
             row = conn.execute(
                 "SELECT owner_user_id FROM projects WHERE id=?", (project_id,)
             ).fetchone()
             if not row:
-                return project_id == "default"
+                # 尚未落库的每用户默认工作区视为本人可用（调用方随后会 ensure）
+                return project_id == self.default_project_id(user_id)
             owner = row["owner_user_id"]
-            return project_id == "default" or owner is None or owner == user_id
+            if owner:
+                return owner == user_id
+            # 遗留无主项目：除旧共享 default 外保持可用（兼容历史命名工作区）
+            return project_id != "default"
         finally:
             conn.close()
 
     def list_projects_for_user(self, user_id: str) -> list[dict[str, Any]]:
-        """返回用户可见的工作区：共享 default、未设 owner、或 owner 匹配。"""
-        self.ensure_project("default", owner_user_id=user_id)
+        """返回用户可见的工作区：本人拥有的 + 遗留无主命名工作区（不含旧共享 default）。"""
+        self.ensure_project(self.default_project_id(user_id), name="我的工作区", owner_user_id=user_id)
         conn = self._conn()
         try:
             rows = conn.execute(
                 "SELECT id, name, owner_user_id, created_at FROM projects "
-                "WHERE id = 'default' OR owner_user_id IS NULL OR owner_user_id = ? "
+                "WHERE owner_user_id = ? OR (owner_user_id IS NULL AND id != 'default') "
                 "ORDER BY created_at ASC",
                 (user_id,),
             ).fetchall()
@@ -117,6 +129,7 @@ class SecretaryService:
             counts["projects"] = conn.execute(
                 "DELETE FROM projects WHERE id != 'default' AND owner_user_id = ?", (uid,)
             ).rowcount
+            # 每用户 default 工作区随用户一并删除；旧共享 default 仅解除归属（保持历史数据）
             conn.execute(
                 "UPDATE projects SET owner_user_id = NULL WHERE id = 'default' AND owner_user_id = ?",
                 (uid,),
@@ -129,8 +142,8 @@ class SecretaryService:
     def create_project(self, name: str, owner_user_id: str) -> dict[str, Any]:
         """为指定用户新建一个独立工作区。"""
         project_id = "ws-" + uuid.uuid4().hex[:8].lower()
-        # 兼容：先确保 default 存在
-        self.ensure_project("default", owner_user_id=owner_user_id)
+        # 兼容：先确保本人的 default 工作区存在
+        self.ensure_project(self.default_project_id(owner_user_id), name="我的工作区", owner_user_id=owner_user_id)
         conn = self._conn()
         try:
             conn.execute(

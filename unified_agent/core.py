@@ -113,6 +113,10 @@ class UnifiedAgent:
     def handle_interaction(self, interaction: InteractionEnvelope) -> ResponseEnvelope:
         if not interaction.message:
             raise ValueError("message is required")
+        # default 工作区不再全局共享：映射为每用户独立工作区（QQ 群等命名工作区不受影响）
+        workspace_id = (interaction.workspace_id or "default").strip() or "default"
+        if workspace_id == "default":
+            workspace_id = self.secretary.default_project_id(interaction.user_id)
         user_context = self.memory.build_user_context(interaction.user_id, interaction.message)
         personality_profile = self.personality.observe(interaction.user_id, interaction.message)
         if personality_profile.get("prompt_block"):
@@ -150,7 +154,7 @@ class UnifiedAgent:
         # 人格驱动的任务脚手架：低C/拖延者自动重写为可开始的第一步
         task_scaffold = (personality_profile.get("playbook") or {}).get("task_scaffold") or {}
         if self._looks_like_sync(interaction.message):
-            draft = self.secretary.draft_sync(interaction.workspace_id, interaction.message, interaction.user_id)
+            draft = self.secretary.draft_sync(workspace_id, interaction.message, interaction.user_id)
             secretary_events.append({"type": "sync_draft", "data": draft})
             requires_confirmation = True
         elif self._looks_like_task(interaction.message):
@@ -166,7 +170,7 @@ class UnifiedAgent:
                     task_scaffold_text = "；".join(task_scaffold.get("steps") or [])
                     if task_scaffold_text:
                         title += f" | 脚手架：{task_scaffold_text[:80]}"
-            patch = self.secretary.create_patch(interaction.workspace_id, "task", "new", "create", title, evidence=interaction.message, created_by=interaction.user_id)
+            patch = self.secretary.create_patch(workspace_id, "task", "new", "create", title, evidence=interaction.message, created_by=interaction.user_id)
             secretary_events.append({"type": "reality_patch", "data": patch})
             # 把脚手架也作为秘书事件，便于前端展示
             if task_scaffold.get("steps"):

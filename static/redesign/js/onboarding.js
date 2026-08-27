@@ -245,7 +245,7 @@
 
     try {
       const username = (window.state && window.state.userId) || '';
-      if (!username || username === 'guest') { host.classList.add('hidden'); return; }
+      if (!username) { host.classList.add('hidden'); return; }
       const resp = await fetch('/v1/users/' + encodeURIComponent(username) + '/personality', { headers: { Authorization: 'Bearer ' + token } });
       if (!resp.ok) { host.classList.add('hidden'); return; }
       const profile = await resp.json();

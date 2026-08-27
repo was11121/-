@@ -148,18 +148,20 @@ class OnboardingService:
         # 3. 看板：3 个任务（待办 / 进行中 / 完成）和 1 个补丁草稿
         try:
             owner = user_id
+            # 写入用户自己的 default 工作区（不再使用旧全局共享 default）
+            project_id = agent.secretary.default_project_id(user_id)
             task_specs = [
                 ("研究 Remedy 的核心场景", "todo"),
                 ("配置 MODEL_API_KEY 让 AI 真正接入", "in_progress"),
                 ("上传第一份真实文档到知识库", "done"),
             ]
             for title, status in task_specs:
-                task = agent.secretary.create_task("default", title, owner=owner)
+                task = agent.secretary.create_task(project_id, title, owner=owner)
                 if status != "todo":
                     # 通过补丁更新状态
                     patch = agent.secretary.create_patch(
-                        "default", "task", task["id"], "update", status, evidence="demo 自动注入",
-                        risk="low", created_by="demo_seed",
+                        project_id, "task", task["id"], "update", status, evidence="demo 自动注入",
+                        risk="low", created_by=owner,
                     )
                     self._record_seed(user_id, "task", task["id"])
                     self._record_seed(user_id, "patch", patch["id"])
@@ -218,16 +220,16 @@ class OnboardingService:
             except Exception:
                 pass
 
-        # tasks / patches: 直接通过 secretary 操作（按 id）
+        # tasks / patches: 直接通过 secretary 操作（按 id；工作区 id 仅作匹配兜底）
         for task_id in rows_by_kind.get("task", []):
             try:
-                agent.secretary.delete_task(task_id, project_id="default")
+                agent.secretary.delete_task(task_id, project_id=agent.secretary.default_project_id(user_id))
                 counts["tasks"] += 1
             except Exception:
                 pass
         for patch_id in rows_by_kind.get("patch", []):
             try:
-                agent.secretary.delete_patch(patch_id, project_id="default")
+                agent.secretary.delete_patch(patch_id, project_id=agent.secretary.default_project_id(user_id))
                 counts["patches"] += 1
             except Exception:
                 pass

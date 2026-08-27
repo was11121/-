@@ -111,7 +111,8 @@ class Sprint0GovernanceTests(unittest.TestCase):
         workspaces = self.client.get("/v1/workspaces", headers=headers2)
         self.assertEqual(workspaces.status_code, 200, workspaces.json)
         ids = [w.get("id") for w in (workspaces.json.get("workspaces") or [])]
-        self.assertIn("default", ids)
+        self.assertIn(f"default::{username}", ids)
+        self.assertNotIn("default", ids, "旧全局共享 default 不应再出现")
         self.assertTrue(all(not str(i).startswith("ws-") for i in ids))
 
     def test_delete_account_requires_double_confirm_via_input(self):

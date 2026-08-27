@@ -5,7 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Remedy 控制台</title>
   <link rel="icon" href="data:," />
-  <link rel="stylesheet" href="/static/redesign/css/common.css" />
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('remedy_theme');
+        document.documentElement.setAttribute('data-theme', saved === 'light' ? 'light' : 'dark');
+      } catch (e) { /* ignore */ }
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://db.onlinewebfonts.com/c/8cb707a9b8a73f8a7403336b861c3074?family=BubbledotICG-FinePos" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/redesign/css/common.css?v=cover1" />
   <script src="/static/redesign/vendor/lucide.min.js"></script>
   <script src="/static/redesign/vendor/marked.umd.js"></script>
   <script src="/static/redesign/js/core.js"></script>
@@ -24,6 +36,9 @@
         </div>
       </div>
       <div class="topbar-tools">
+        <button id="themeToggleBtn" class="btn btn-ghost btn-sm btn-icon" onclick="toggleTheme()" title="切换深色/浅色主题">
+          <i id="themeToggleIcon" data-lucide="moon"></i>
+        </button>
         <div id="healthBadge" class="chip status-chip is-ok">
           <span class="status-dot"></span>
           <span id="healthText">服务就绪</span>
@@ -40,6 +55,14 @@
         <div id="memoryIndicatorPanel" class="popover hidden">
           <div class="popover-title">记忆引用明细</div>
           <div id="memoryIndicatorDetail" class="popover-body"></div>
+        </div>
+        <div id="notifBell" class="chip memory-chip" title="点击查看待处理事项" onclick="window.toggleNotificationPopover && window.toggleNotificationPopover()">
+          <i data-lucide="bell"></i>
+          <span id="notifBellBadge" class="kanban-badge hidden"></span>
+        </div>
+        <div id="notifPanel" class="popover hidden">
+          <div class="popover-title">待处理事项</div>
+          <div id="notifList" class="popover-body"><p class="empty">暂无待处理事项</p></div>
         </div>
         <div id="authUserBar" class="chip user-chip hidden" onclick="toggleAccountMenu()" title="点击打开账号菜单" style="cursor:pointer;">
           <i data-lucide="user"></i>
@@ -115,6 +138,7 @@
       </aside>
 
       <main class="main">
+        <canvas id="mainBgRain" class="main-bg-rain"></canvas>
         <section id="tab-overview" class="pane active">
           <div class="pane-inner">
             <div id="onboardingWelcome" class="welcome-card hidden">
@@ -621,36 +645,77 @@
     </div>
   </div>
 
-  <div id="authOverlay" class="auth-overlay">
-    <div class="auth-card">
-      <div class="auth-brand">
-        <div class="brand-mark"><i data-lucide="atom"></i></div>
-        <h2>Remedy</h2>
-        <p>记忆、任务、知识库与补丁审计的统一入口</p>
-      </div>
-      <div class="auth-features">
-        <div class="auth-feature"><i data-lucide="brain"></i><span>记忆隔离</span></div>
-        <div class="auth-feature"><i data-lucide="shield-check"></i><span>补丁审计</span></div>
-        <div class="auth-feature"><i data-lucide="book-open"></i><span>知识库检索</span></div>
-      </div>
-      <div class="auth-tabs">
-        <button id="authTabLogin" class="auth-tab active" onclick="setAuthMode('login')">登录</button>
-        <button id="authTabRegister" class="auth-tab" onclick="setAuthMode('register')">注册</button>
-      </div>
-      <form id="authForm" class="auth-form" onsubmit="handleAuthSubmit(event)">
-        <input id="authUsername" class="field" type="text" placeholder="用户名" autocomplete="username" />
-        <input id="authPassword" class="field" type="password" placeholder="密码" autocomplete="current-password" />
-        <input id="authNickname" class="field hidden" type="text" placeholder="昵称（可选）" autocomplete="nickname" />
-        <p id="authError" class="auth-error hidden"></p>
-        <button id="authSubmitBtn" type="submit" class="btn btn-primary btn-block">登录</button>
-      </form>
-      <div class="auth-demo">
-        <span class="auth-demo-label">新用户请点击下方“注册”创建账号</span>
-        <div class="auth-demo-grid" style="grid-template-columns:1fr;">
-          <button class="btn btn-sm" onclick="setAuthMode('register'); document.getElementById('authUsername').focus()"><i data-lucide="user-plus"></i>去注册</button>
+  <div id="authOverlay" class="auth-overlay cover-scope">
+    <video class="cover-bg-video" autoplay muted loop playsinline>
+      <source src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260809_012548_ef22562c-c0ae-4816-ad9d-f8922af4e6a7.mp4" type="video/mp4" />
+    </video>
+    <div class="cover-page">
+      <header class="cover-header anim" style="--d:0s">
+        <div class="cover-logo"><i data-lucide="atom"></i></div>
+        <div class="cover-brand-copy">
+          <strong>Remedy</strong>
+          <span>RealityPatch Console</span>
+        </div>
+      </header>
+
+      <div class="cover-hero">
+        <div class="cover-trust anim" style="--d:0.05s">
+          <div class="cover-trust-avatars">
+            <div class="cover-avatar"><span><i data-lucide="brain"></i></span></div>
+            <div class="cover-avatar"><span><i data-lucide="shield-check"></i></span></div>
+            <div class="cover-avatar"><span><i data-lucide="book-open"></i></span></div>
+          </div>
+          <div class="cover-trust-pill">记忆隔离 · 补丁审计 · 知识库检索</div>
+        </div>
+
+        <h1 class="cover-headline">
+          <span class="cover-line anim" style="--d:0.12s">记忆与任务</span>
+          <span class="cover-line anim" style="--d:0.3s">因你而进化</span>
+        </h1>
+
+        <p class="cover-sub anim" style="--d:0.28s">
+          统一的记忆、任务看板、知识库与补丁审计入口，为你的智能体
+          持续学习与自主运行提供基座。
+        </p>
+
+        <div class="cover-card anim" style="--d:0.4s">
+          <div class="auth-tabs">
+            <button id="authTabLogin" class="auth-tab active" onclick="setAuthMode('login')">登录</button>
+            <button id="authTabRegister" class="auth-tab" onclick="setAuthMode('register')">注册</button>
+          </div>
+          <form id="authForm" class="auth-form" onsubmit="handleAuthSubmit(event)">
+            <input id="authUsername" class="field" type="text" placeholder="用户名" autocomplete="username" />
+            <input id="authPassword" class="field" type="password" placeholder="密码" autocomplete="current-password" />
+            <input id="authNickname" class="field hidden" type="text" placeholder="昵称（可选）" autocomplete="nickname" />
+            <p id="authError" class="auth-error hidden"></p>
+            <button id="authSubmitBtn" type="submit" class="btn cover-cta btn-block">登录</button>
+          </form>
+          <button class="cover-guest" onclick="enterAsGuest()">访客体验（免注册，数据按设备隔离）</button>
         </div>
       </div>
-      <button class="auth-guest" onclick="enterAsGuest()">先以访客身份浏览</button>
+
+      <div class="cover-stats">
+        <div class="cover-stat anim" style="--d:0.5s">
+          <div class="cover-stat-icon">&lt;</div>
+          <div class="cover-stat-value" data-target="120" data-suffix="ms" data-decimals="0">0ms</div>
+          <div class="cover-stat-label">平均响应延迟</div>
+        </div>
+        <div class="cover-stat anim" style="--d:0.58s">
+          <div class="cover-stat-icon">%</div>
+          <div class="cover-stat-value" data-target="99.99" data-suffix="%" data-decimals="2">0%</div>
+          <div class="cover-stat-label">平台可用性</div>
+        </div>
+        <div class="cover-stat anim" style="--d:0.66s">
+          <div class="cover-stat-icon">*</div>
+          <div class="cover-stat-value" data-target="24" data-suffix="/7" data-decimals="0">0/7</div>
+          <div class="cover-stat-label">自主运行时长</div>
+        </div>
+        <div class="cover-stat anim" style="--d:0.74s">
+          <div class="cover-stat-icon">#</div>
+          <div class="cover-stat-value" data-target="2.4" data-suffix="M" data-decimals="1">0M</div>
+          <div class="cover-stat-label">已管理记忆条目</div>
+        </div>
+      </div>
     </div>
   </div>
 
