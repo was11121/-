@@ -1,8 +1,33 @@
-# 现实补丁 Agent
+# Remedy · 现实补丁 Agent
 
-这是从 `MyAgent重构` 抽取出来的独立统一 Agent 骨架。原项目保持不变。本项目以本地隔离的反馈记忆为底座，统一 Web/QQ 入口，并提供 AI 图书馆、文档处理、AI 秘书、现实补丁、主动思维 Tip 和 3D 记忆图谱可视化。
+一个把「持续记住你、理解你、并帮你把想法落地成可追踪现实变化」作为核心目标的个人智能体系统。它以本地隔离的反馈记忆为底座，统一 Web/QQ 入口，并提供 AI 图书馆、文档处理、AI 秘书（现实补丁）、大五人格画像、主动思维 Tip 和 3D 记忆图谱可视化六大能力模块，全部围绕同一套跨会话记忆协同工作。
 
 项目简介、技术方案与创新点说明见 [`docs/PROJECT_INTRO.md`](docs/PROJECT_INTRO.md)（或 Word 版 `docs/Remedy-项目简介.docx`）；演示视频大纲与讲解稿见 [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md)。
+
+## 技术栈
+
+| 层次 | 技术选型 |
+|---|---|
+| 后端框架 | Python 3 + Flask，REST API（`API.md` 完整定义 30+ 接口） |
+| 数据层 | SQLAlchemy 2.0 ORM；默认 SQLite，`DATABASE_URL` 一键切换 PostgreSQL 16，业务代码零改动 |
+| 大模型接入 | DeepSeek 官方 API（`deepseek-v4-flash` / `deepseek-chat`），支持任意 OpenAI 兼容 `BASE_URL`；无密钥/网络异常时自动降级为本地规则响应器 |
+| 人格识别模型 | Hugging Face `Minej/bert-base-personality`（BERT 微调，五维大五人格回归），`transformers` + `torch` 推理，未安装时自动回退中文启发式规则引擎 |
+| 中文分词与检索 | `jieba` 分词 + 词粒度交集打分，用于记忆语义检索 |
+| 文档处理 | `pypdf` / `python-docx` / `python-pptx` / `openpyxl`，统一清洗、SHA-256 去重、索引 |
+| 3D 可视化 | three.js + 3d-force-graph，前端力导向图渲染记忆关系网络 |
+| 前端 | 原生 HTML/CSS/JS 控制台（`static/redesign/`），无框架依赖，加载轻量 |
+| 联网检索 | searxng / Tavily / Jina Reader 三通道自动故障转移，可选 SSH 中转 |
+| 认知引擎 | Python 实现为默认路径，预留 C++ 动态库适配器接口（`cognitive_engine/`），加载失败自动回退 |
+| 部署 | Docker + docker-compose（Flask app + PostgreSQL + 可选 searxng），`/health` 健康检查与自动重启 |
+
+## 核心算法与模型
+
+- **记忆抽取引擎**（`memory_runtime/service.py`）：基于正则模式库识别偏好、身份、需求、边界、指令、纠正等六类记忆信号，每类带独立置信度权重；重复出现的记忆会提升置信度并累加 `occurrence_count`，形成"越常提及、系统越确信"的自增强机制；识别到身份/纠正类表达时，旧记忆会被标记为 `superseded` 而非直接删除，保留完整变更历史。
+- **语义检索**：中文查询先经 `jieba` 分词，再与记忆内容/证据文本做词粒度交集打分排序，兼顾中英文与数字混排场景。
+- **大五人格建模**（`personality_runtime/`）：优先调用 `Minej/bert-base-personality` BERT 模型对对话文本做五维人格回归（开放性/尽责性/外向性/宜人性/神经质），并维护跨会话的观测序列做滑动更新；模型不可用时自动切换到基于关键词与语言风格特征的启发式打分，保证功能连续可用。人格分数不驱动角色扮演，而是映射为具体的督促/扬长策略（`traits.py` 的 coaching playbook）。
+- **记忆图谱合成算法**（`memory_runtime/graph.py`）：三层建边策略——同证据来源的记忆聚为 evidence 边、同类目记忆按置信度降序链接为 category 边（限流 40 条/类目，避免 O(n²) 爆炸）、再对全体记忆按置信度排序做保底链式连接（related 边），确保图谱始终连通、无孤立散点，供前端 3D 力导向布局渲染。
+- **现实补丁状态机**（`secretary_runtime/`）：项目进展变更强制经过 `Draft → Applied → Rolled Back` 三态流转，每次状态迁移写入审计日志，杜绝 AI 单方面修改用户现实状态。
+- **主动思维 Tip 引擎**（`tip_engine/`）：基于对话重复度、风险关键词、论证完整度三类启发式规则触发提示，带每类型独立冷却窗口（默认 900 秒）与用户可关闭开关，避免打扰。
 
 ## 快速运行
 
