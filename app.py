@@ -547,6 +547,16 @@ def edit_memory(user_id: str, memory_id: str):
     return jsonify({"memory": updated})
 
 
+@app.get("/v1/users/<user_id>/memory/graph")
+@require_auth
+def user_memory_graph(user_id: str):
+    """返回当前用户记忆的图结构（节点=记忆，边=共享证据链/同类目），供 3D 记忆图谱渲染。"""
+    user = g.current_user
+    if user["role"] != "admin" and user["username"] != user_id and user["id"] != user_id:
+        return jsonify({"error": "无权查看其他用户的记忆图谱", "code": "FORBIDDEN"}), 403
+    return jsonify({"user_id": user_id, **agent.get_memory_graph(user_id)})
+
+
 @app.get("/v1/admin/users/<user_id>/interactions")
 @require_admin
 def admin_user_interactions(user_id: str):

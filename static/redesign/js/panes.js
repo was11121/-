@@ -13,6 +13,7 @@
         loadUserMemories();
         loadPersonalityProfile();
       }
+      if (tabId === 'graph') loadMemoryGraph();
       if (tabId === 'web') refreshIcons();
       if (tabId === 'settings') loadAdminSettings();
       // 对话页实时同步人格画像：进入对话 Tab 时开启轮询，离开时停止
@@ -694,6 +695,7 @@
           updateMemoryIndicator();
           toast('反馈已记录', 'success');
           loadUserMemories();
+          if (state.activeTab === 'graph') loadMemoryGraph();
         } else {
           toast('反馈提交失败：' + (data.error || '未知错误'), 'error');
         }
@@ -717,6 +719,7 @@
         if (resp.ok) {
           toast('记忆已更新', 'success');
           loadUserMemories();
+          if (state.activeTab === 'graph') loadMemoryGraph();
         } else {
           toast('更新失败：' + (data.error || '未知错误'), 'error');
         }
@@ -736,6 +739,7 @@
           if (resp.ok && data.success) {
             toast('记忆已遗忘', 'success');
             loadUserMemories();
+            if (state.activeTab === 'graph') loadMemoryGraph();
           } else {
             toast('遗忘操作未成功', 'error');
           }

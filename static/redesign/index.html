@@ -20,10 +20,13 @@
   <link rel="stylesheet" href="/static/redesign/css/common.css?v=cover1" />
   <script src="/static/redesign/vendor/lucide.min.js"></script>
   <script src="/static/redesign/vendor/marked.umd.js"></script>
+  <script src="/static/redesign/vendor/three.min.js"></script>
+  <script src="/static/redesign/vendor/3d-force-graph.min.js"></script>
   <script src="/static/redesign/js/core.js"></script>
   <script src="/static/redesign/js/panes.js"></script>
   <script src="/static/redesign/js/onboarding.js"></script>
   <script src="/static/redesign/js/patches.js"></script>
+  <script src="/static/redesign/js/graph.js"></script>
 </head>
 <body>
   <div class="app">
@@ -116,6 +119,9 @@
           </button>
           <button id="tabBtn-memory" class="nav-btn" onclick="switchTab('memory')">
             <i data-lucide="brain"></i><span>记忆与画像</span>
+          </button>
+          <button id="tabBtn-graph" class="nav-btn" onclick="switchTab('graph')">
+            <i data-lucide="share-2"></i><span>记忆图谱</span>
           </button>
           <button id="tabBtn-web" class="nav-btn" onclick="switchTab('web')">
             <i data-lucide="globe"></i><span>联网检索</span>
@@ -534,6 +540,21 @@
             </section>
 
             <div id="memoryCardGrid" class="mem-list"></div>
+          </div>
+        </section>
+
+        <section id="tab-graph" class="pane">
+          <div class="pane-inner pane-inner-flush">
+            <div class="panel-head">
+              <div class="panel-title">
+                <h2>记忆图谱</h2>
+                <p>基于证据链与类目的 3D 记忆关系可视化</p>
+              </div>
+              <button class="btn btn-sm" onclick="loadMemoryGraph()"><i data-lucide="refresh-cw"></i>刷新图谱</button>
+            </div>
+            <div id="memoryGraphEmpty" class="empty-state hidden"></div>
+            <div id="memoryGraphContainer" class="graph-canvas-wrap"></div>
+            <div id="memoryGraphInfoPanel" class="graph-info-panel hidden"></div>
           </div>
         </section>
 

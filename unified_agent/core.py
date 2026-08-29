@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from cognitive_engine import load_cognitive_engine
 from library_runtime import LocalLibrary
 from memory_runtime import MemoryService
+from memory_runtime.graph import build_memory_graph
 try:
     from memory_runtime.mcp_client import MemoryMcpClient  # type: ignore
 except Exception:  # pragma: no cover - MCP 可选，未安装时回退本地
@@ -245,6 +246,10 @@ class UnifiedAgent:
 
     def get_user_profile_stats(self, user_id: str) -> dict:
         return self.memory.get_user_profile_stats(user_id)
+
+    def get_memory_graph(self, user_id: str) -> dict:
+        memories = self.memory.search_user_memory(user_id, "", limit=300)
+        return build_memory_graph(memories)
 
     def get_personality_profile(self, user_id: str) -> dict:
         return self.personality.get_profile(user_id)

@@ -387,6 +387,28 @@
     }
     .pane-inner { max-width: 1440px; margin: 0 auto; }
 
+    #tab-graph.pane.active { display: flex; flex-direction: column; padding: 0; }
+    .pane-inner-flush { display: flex; flex-direction: column; flex: 1; min-height: 0; width: 100%; max-width: none; margin: 0; padding: 26px 30px 20px; gap: 14px; position: relative; box-sizing: border-box; }
+    .graph-canvas-wrap { flex: 1; width: 100%; min-width: 0; min-height: 360px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #05070a; }
+    .graph-canvas-wrap.hidden { display: none; }
+    .graph-info-panel {
+      position: absolute;
+      right: 46px;
+      bottom: 40px;
+      width: 260px;
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--surface-3);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+    }
+    .graph-info-panel.hidden { display: none; }
+    .graph-info-panel p { margin: 8px 0; font-size: 13px; line-height: 1.5; }
+    .graph-info-panel .confidence-bar { position: relative; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; margin: 6px 0; }
+    .graph-info-panel .confidence-bar::after { content: ''; position: absolute; inset: 0; width: var(--pct, 0%); background: var(--accent); }
+    .graph-info-panel .actions { display: flex; gap: 8px; margin-top: 10px; }
+    .graph-info-panel .actions button { flex: 1; }
+
     .panel-head {
       display: flex;
       align-items: flex-end;

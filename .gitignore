@@ -26,3 +26,4 @@ huggingface/
 *.bin
 *.safetensors
 models/
+.playwright-mcp/
