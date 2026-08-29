@@ -1,6 +1,8 @@
 # 现实补丁 Agent
 
-这是从 `MyAgent重构` 抽取出来的独立统一 Agent 骨架。原项目保持不变。本项目以本地隔离的反馈记忆为底座，统一 Web/QQ 入口，并提供 AI 图书馆、文档处理、AI 秘书、现实补丁和主动思维 Tip。
+这是从 `MyAgent重构` 抽取出来的独立统一 Agent 骨架。原项目保持不变。本项目以本地隔离的反馈记忆为底座，统一 Web/QQ 入口，并提供 AI 图书馆、文档处理、AI 秘书、现实补丁、主动思维 Tip 和 3D 记忆图谱可视化。
+
+项目简介、技术方案与创新点说明见 [`docs/PROJECT_INTRO.md`](docs/PROJECT_INTRO.md)（或 Word 版 `docs/Remedy-项目简介.docx`）；演示视频大纲与讲解稿见 [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md)。
 
 ## 快速运行
 
@@ -23,7 +25,7 @@ python app.py
 - `unified_agent/`：协议、统一 Agent Core 和响应提供器
 - `auth_runtime/`：登录注册、Bearer Token、角色权限（admin / user）
 - `storage/`：集中式用户数据库（SQLAlchemy 模型与连接层）
-- `memory_runtime/`：用户分区、反馈记忆、画像上下文
+- `memory_runtime/`：用户分区、反馈记忆、画像上下文、`graph.py`（3D 记忆图谱节点/边合成）
 - `personality_runtime/`：大五人格识别与秘书督促策略（补短板、扬长处）
 - `library_runtime/`：文档解析、净化、索引、检索和引用
 - `web_runtime/`：联网搜索与网页读取（searxng / Tavily / Jina Reader，可配 SSH 中转）
@@ -33,6 +35,8 @@ python app.py
 - `adapters/`：Web/QQ 渠道适配说明和兼容层
 - `tools/`：数据迁移等运维脚本
 - `docs/ARCHITECTURE.md`：统一架构蓝图
+- `docs/PROJECT_INTRO.md` / `docs/Remedy-项目简介.docx`：项目简介（问题、场景、功能、技术方案、创新点、完成情况）
+- `docs/DEMO_SCRIPT.md`：演示视频大纲与逐段讲解稿
 - `docs/Remedy-项目完全解读.docx`：面向零基础读者的完整说明
 - `docs/Remedy-前端控制台接口文档.docx`：控制台操作与 HTTP 接口映射
 - `tests/`：核心闭环测试
@@ -96,6 +100,16 @@ python app.py
 - 今天该督促什么、该发挥什么长处
 
 这不是让 Agent 用某种人格说话，也不是心理诊断。优先使用 Hugging Face 上的 `Minej/bert-base-personality`；未安装 `torch`/`transformers` 时自动用中文启发式。可在 `.env` 设置 `PERSONALITY_DISABLE_BERT=1` 强制跳过模型下载。
+
+## 3D 记忆图谱
+
+控制台「记忆图谱」Tab（`GET /v1/users/<user_id>/memory/graph`）把用户的记忆实时合成为节点/边结构并做 3D 可视化：
+
+- **evidence 边**：同一段证据文本衍生出的多条记忆之间连线
+- **category 边**：同类目记忆按置信度链式连接（限流避免大类目下 O(n²) 连接数）
+- **related 保底边**：为避免出现完全孤立的散点，按置信度把所有记忆串成一条链兜底
+
+前端基于 three.js + 3d-force-graph（`static/redesign/vendor/`）渲染，可拖拽旋转、点击节点查看详情。普通用户仅能查看自身图谱，越权访问返回 `403`。
 
 ## Linux / Docker 部署（生产）
 
