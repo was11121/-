@@ -9,6 +9,8 @@ import uuid
 from typing import Callable
 from datetime import datetime, timezone
 
+import jieba
+
 from cognitive_engine import load_cognitive_engine
 from library_runtime import LocalLibrary
 from memory_runtime import MemoryService
@@ -45,7 +47,7 @@ def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def _fallback_responder(message: str, user_context: str, library_context: str, web_context: str = "") -> str:
+def _fallback_responder(message: str, user_context: str, library_context: str, web_context: str = "", secretary_context: str = "") -> str:
     if web_context:
         return f"以下是实时检索到的联网结果：\n\n{web_context}"
     if library_context:
@@ -152,12 +154,20 @@ class UnifiedAgent:
 
         secretary_events: list[dict] = []
         requires_confirmation = False
+        status_change_result: dict | None = None
         # 人格驱动的任务脚手架：低C/拖延者自动重写为可开始的第一步
         task_scaffold = (personality_profile.get("playbook") or {}).get("task_scaffold") or {}
+        status_intent = self._looks_like_status_change_intent(interaction.message)
         if self._looks_like_sync(interaction.message):
             draft = self.secretary.draft_sync(workspace_id, interaction.message, interaction.user_id)
             secretary_events.append({"type": "sync_draft", "data": draft})
             requires_confirmation = True
+        elif status_intent is not None:
+            status_change_result = self._apply_status_change_via_chat(
+                workspace_id, interaction.message, status_intent, interaction.user_id
+            )
+            if status_change_result is not None and status_change_result.get("outcome") == "applied":
+                secretary_events.append({"type": "reality_patch", "data": status_change_result["patch"]})
         elif self._looks_like_task(interaction.message):
             title = re.sub(r"^(?:帮我|请)?(?:创建|新增|添加)?(?:一个)?任务[:：]?", "", interaction.message).strip() or interaction.message
             # 初版：对拖延倾向或低尽责，追加脚手架提示到 proposed_change
@@ -178,7 +188,9 @@ class UnifiedAgent:
                 secretary_events.append({"type": "task_scaffold", "data": task_scaffold})
             requires_confirmation = True
 
-        if self._looks_like_identity_recall(interaction.message):
+        if status_change_result is not None:
+            content = status_change_result["content"]
+        elif self._looks_like_identity_recall(interaction.message):
             # 身份召回问句与教学语句字面重叠很少，关键词检索常常匹配不到；
             # 直接按置信度取该用户的记忆记录，绕开大模型，避免检索落空或生成阶段编造。
             recall_memories = self.memory.search_user_memory(interaction.user_id, "", limit=6)
@@ -191,7 +203,8 @@ class UnifiedAgent:
                 "现在喜欢喝咖啡」，我会自动更新对应的长期记忆；你也可以到「记忆与画像」面板里直接编辑或删除某一条。"
             )
         else:
-            content = self.responder(interaction.message, user_context, library_context, web_context)
+            secretary_context = self._build_secretary_context(secretary_events)
+            content = self.responder(interaction.message, user_context, library_context, web_context, secretary_context)
         memory_result = self.memory.record_interaction(interaction.user_id, interaction.message, content, source=interaction.channel)
         memory_events = [MemoryEvent("stored", item.get("id"), item.get("content", ""), float(item.get("confidence", 0)), item.get("category", "")) for item in memory_result.get("stored", [])]
         tip_list = self.tips.evaluate(interaction.user_id, interaction.message, self.memory.recent_interactions(interaction.user_id), risks=[])
@@ -520,6 +533,28 @@ class UnifiedAgent:
         return counts
 
     @staticmethod
+    def _build_secretary_context(secretary_events: list[dict]) -> str:
+        """把本轮真实发生的秘书动作摘要成一行文本，喂给 LLM，防止它凭空声称"已创建补丁/已同步"等未发生的系统行为。"""
+        if not secretary_events:
+            return ""
+        lines: list[str] = []
+        for event in secretary_events:
+            etype = event.get("type")
+            data = event.get("data") or {}
+            if etype == "reality_patch":
+                op = data.get("operation")
+                pid = data.get("id")
+                if op == "create":
+                    lines.append(f"已生成补丁 {pid}（新建任务，待用户确认）")
+                elif op == "update":
+                    lines.append(f"已生成补丁 {pid}（任务状态变更为「{data.get('proposed_change')}」，状态：{data.get('status')}）")
+            elif etype == "sync_draft":
+                lines.append(f"已生成同步草稿 {data.get('session_id')}，待用户确认")
+            elif etype == "task_scaffold":
+                lines.append("已生成任务脚手架建议")
+        return "；".join(lines)
+
+    @staticmethod
     def _looks_like_library_request(message: str) -> bool:
         return any(word in message for word in ("文档", "资料", "知识", "图书馆", "来源", "引用", "PDF", "文件"))
 
@@ -530,6 +565,109 @@ class UnifiedAgent:
     @staticmethod
     def _looks_like_task(message: str) -> bool:
         return bool(re.search(r"(?:创建|新增|添加).{0,8}任务", message))
+
+    _STATUS_LABELS = {"todo": "待办", "in_progress": "进行中", "blocked": "受阻", "done": "完成"}
+
+    _STATUS_CHANGE_WORDS: list[tuple[str, tuple[str, ...]]] = [
+        ("done", ("做完了", "完成了", "搞定了", "结束了", "改成完成", "标记为完成", "设为完成", "状态改为完成")),
+        ("blocked", ("卡住了", "卡壳了", "受阻了", "遇到问题了", "推不动了", "改成受阻", "标记为受阻", "设为受阻", "状态改为受阻")),
+        ("in_progress", ("开始做了", "开始弄了", "在推进", "正在做", "启动了", "改成进行中", "标记为进行中", "设为进行中", "状态改为进行中")),
+        ("todo", ("改回待办", "退回待办", "还没开始", "先放一放", "改成待办", "标记为待办", "设为待办", "状态改为待办")),
+    ]
+    # 弱证据触发词：消息里没有直接点出任务标题原文时，还需要这类词才敢做模糊匹配，避免把"我今天很受阻""搞定了"这种无关闲聊当成指令。
+    _STATUS_CHANGE_CUE_RE = re.compile(r"(任务|标记|改成|改为|设为|设成|切换|状态)")
+    # 任务脚手架会把提示语拼接在标题后面，比对时要先裁掉，否则用户不会把这段自动生成的文字打出来。
+    _TASK_TITLE_SUFFIX_MARKERS = ("（助手已按你偏好改写为", " | 脚手架：")
+
+    @classmethod
+    def _looks_like_status_change_intent(cls, message: str) -> str | None:
+        """识别消息里是否包含状态变更词（"卡住了""做完了""标记为进行中"等），返回目标状态，不判断是否指向具体任务。"""
+        text = (message or "").strip()
+        for status, words in cls._STATUS_CHANGE_WORDS:
+            if any(word in text for word in words):
+                return status
+        return None
+
+    @classmethod
+    def _task_title_core(cls, title: str) -> str:
+        text = str(title or "")
+        for marker in cls._TASK_TITLE_SUFFIX_MARKERS:
+            idx = text.find(marker)
+            if idx != -1:
+                text = text[:idx]
+        return text.strip()
+
+    def _match_task_by_text(self, tasks: list[dict], text: str) -> list[tuple[int, dict]]:
+        """用 jieba 分词做词粒度交集打分，在候选任务标题里找出与消息最相关的任务（与记忆检索同一套思路）。"""
+        text_lower = text.lower()
+        text_tokens = {t.strip() for t in jieba.lcut(text_lower) if t.strip()}
+        scored: list[tuple[int, dict]] = []
+        for task in tasks:
+            title_lower = self._task_title_core(task.get("title")).lower()
+            if not title_lower:
+                continue
+            title_tokens = {t.strip() for t in jieba.lcut(title_lower) if t.strip()}
+            score = 2 * len(text_tokens & title_tokens)
+            if score > 0:
+                scored.append((score, task))
+        scored.sort(key=lambda pair: pair[0], reverse=True)
+        return scored
+
+    def _apply_status_change_via_chat(self, workspace_id: str, message: str, status: str, actor: str) -> dict | None:
+        """对话触发的状态切换：定位任务、直接生成并自动确认补丁，返回给用户的提示文案。
+
+        证据分两级：消息里直接出现任务标题原文是强证据，无需额外触发词；
+        否则要求出现"任务/标记/改为"等触发词，再做模糊匹配。两者都没有就返回 None，交回普通聊天处理。
+        """
+        label = self._STATUS_LABELS[status]
+        tasks = self.secretary.dashboard(workspace_id).get("tasks") or []
+        text_upper = message.upper()
+        text_lower = message.lower()
+        # 任务 ID（消息里直接带 T-xxxxxxxx）是最强证据，常见于用户按歧义提示回复具体 ID 的场景。
+        id_hits = [t for t in tasks if str(t.get("id") or "").upper() in text_upper]
+        substring_hits = [t for t in tasks if self._task_title_core(t.get("title")).lower() and self._task_title_core(t.get("title")).lower() in text_lower]
+        if id_hits:
+            candidates: list[tuple[int, dict]] = [(200, t) for t in id_hits]
+        elif substring_hits:
+            candidates = [(100, t) for t in substring_hits]
+        elif self._STATUS_CHANGE_CUE_RE.search(message):
+            candidates = self._match_task_by_text(tasks, message)
+        else:
+            return None
+        if not candidates:
+            return {
+                "outcome": "no_match",
+                "content": f"我没找到看起来匹配的任务，没能把状态切换为「{label}」。你可以到「秘书看板」确认任务标题，或者把任务名说得更具体一点再试一次。",
+            }
+        top_score = candidates[0][0]
+        tied = [task for score, task in candidates if score == top_score]
+        if len(tied) > 1:
+            names = "、".join(f"「{self._task_title_core(t.get('title'))}」({t.get('id')})" for t in tied[:5])
+            return {
+                "outcome": "ambiguous",
+                "content": f"找到多个可能匹配的任务：{names}。我不确定要把哪个切换为「{label}」，麻烦说得更具体一点（比如带上任务 ID）。",
+            }
+        task = tied[0]
+        title = self._task_title_core(task.get("title"))
+        if task.get("status") == status:
+            return {
+                "outcome": "noop",
+                "content": f"任务「{title}」已经是「{label}」状态了，不用改。",
+            }
+        old_label = self._STATUS_LABELS.get(task.get("status"), task.get("status"))
+        patch = self.secretary.create_patch(
+            workspace_id, "task", task["id"], "update", status,
+            evidence=message, created_by=actor,
+        )
+        applied = self.confirm_patch(patch["id"], actor)
+        return {
+            "outcome": "applied",
+            "patch": applied,
+            "content": (
+                f"已把任务「{title}」（{task['id']}）的状态从「{old_label}」切换为「{label}」。"
+                f"如果切错了，可以在「秘书看板」的补丁审计流水里找到 {applied['id']}，点「回滚」撤销。"
+            ),
+        }
 
     _IDENTITY_RECALL_RE = re.compile(r"(叫什么|我是谁|记得我|我的名字)")
 

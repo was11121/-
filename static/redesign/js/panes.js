@@ -397,10 +397,14 @@
         if (tasks.length === 0) {
           Object.values(lanes).forEach(lane => lane.innerHTML = '<p class="empty">无任务</p>');
         } else {
+          const statusLabels = { todo: '待办', in_progress: '进行中', blocked: '受阻', done: '完成' };
           tasks.forEach(task => {
             const lane = lanes[task.status] || lanes.todo;
             const card = document.createElement('div');
             card.className = 'task-card';
+            const options = Object.keys(statusLabels).map(s =>
+              `<option value="${s}" ${s === task.status ? 'selected' : ''}>${statusLabels[s]}</option>`
+            ).join('');
             card.innerHTML = `
               <div class="task-meta">
                 <span class="mono">${escapeHtml(task.id)}</span>
@@ -409,6 +413,7 @@
               <div class="task-title">${escapeHtml(task.title)}</div>
               <div class="task-foot">
                 <span>${task.updated_at ? escapeHtml(String(task.updated_at).substring(5, 16)) : ''}</span>
+                <select class="task-status-select" onchange="updateTaskStatus('${task.id}', this.value)">${options}</select>
               </div>
             `;
             lane.appendChild(card);
@@ -448,6 +453,27 @@
         refreshIcons();
       } catch (err) {
         console.error('Load dashboard failed:', err);
+      }
+    }
+
+    async function updateTaskStatus(taskId, status) {
+      try {
+        const resp = await fetch(`/v1/workspaces/${encodeURIComponent(state.workspaceId)}/tasks/${encodeURIComponent(taskId)}/status`, {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ status })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+          toast(`任务 ${taskId} 已切换状态`, 'success');
+          loadDashboard();
+        } else {
+          toast('切换失败：' + (data.error || '未知错误'), 'error');
+          loadDashboard();
+        }
+      } catch (err) {
+        toast('网络异常：' + err.message, 'error');
+        loadDashboard();
       }
     }
 

@@ -1057,6 +1057,7 @@
     .task-meta .mono { font-weight: 500; }
     .task-title { font-size: 12px; font-weight: 600; color: var(--ink); line-height: 1.45; }
     .task-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 10px; color: var(--faint); }
+    .task-status-select { font-size: 10px; color: var(--text); background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: 2px 4px; cursor: pointer; }
     .empty { padding: 26px 12px; text-align: center; color: var(--faint); font-size: 12px; }
 
     .table-wrap { overflow-x: auto; }

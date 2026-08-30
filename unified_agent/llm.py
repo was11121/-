@@ -25,7 +25,7 @@ def create_llm_responder(
 ) -> Callable[[str, str, str, str], str]:
     """创建统一的 LLM Responder 函数，兼容 OpenAI Chat Completions 规范。"""
 
-    def responder(message: str, user_context: str, library_context: str, web_context: str = "摘要为空") -> str:
+    def responder(message: str, user_context: str, library_context: str, web_context: str = "摘要为空", secretary_context: str = "") -> str:
         # 优先从 runtime_settings 热读取（跨 gunicorn worker 生效），回退 os.environ
         try:
             from storage import runtime_settings as _rs
@@ -43,10 +43,15 @@ def create_llm_responder(
             "1. 语言亲切、专业、精炼，使用 Markdown 格式。",
             "2. 当提供【长期用户记忆】时，请自然结合用户的个人偏好、需求、习惯或身份进行个性化回应。严禁编造记忆中不存在的姓名、偏好或事实：引用身份/偏好信息必须与【长期用户记忆】原文一致；若记忆中没有相关内容，如实说明未记录，不要凭空编造。每条记忆后标注的“记录于 YYYY-MM-DD”是该记忆的真实来源时间，引用该记忆时可以顺带提及，帮助用户核实与追溯。",
             "3. 当提供【本地知识库参考】时，请以此为权威依据，严谨引用并回答，并在回答中说明依据来源。",
-            "4. 如果用户提出了关于任务创建、项目进展同步等请求，请给予清晰正面的答复，并告知后台已生成待确认现实补丁或同步草稿。",
+            "4. 是否已经生成秘书补丁、同步草稿或修改了任务状态，只以下方【本轮秘书系统动作】为准。该栏目写"
+            "\"未触发任何秘书动作\"时，绝对不能说自己已创建补丁、已生成草稿、已同步进展或已更新任何后台记录——"
+            "这类话术等同于编造系统行为。该栏目列出了具体动作时，才可以据实告知用户，但要用自然语言转述、"
+            "不要照抄该栏目的标题或格式，也不要编造它没提到的细节（比如具体的补丁状态用词）。",
             "5. 若提供【秘书督促档案】：不要用某种人格口吻说话，不要扮演用户。根据短板督促、根据长处加码，给出今天可执行的下一步。",
             "6. 当提供【联网检索结果】时，说明这是实时检索到的信息，回答用户关于时事、搜索、网页内容、行情等问题时要基于这些结果，并标注信息检索时间；若联网结果为空或无关，如实说明无法实时确认，不要编造来源。",
         ]
+
+        system_parts.append(f"\n【本轮秘书系统动作】\n{secretary_context or '未触发任何秘书动作（未创建补丁、未生成草稿、未变更任何任务状态）'}")
 
         if user_context:
             system_parts.append(f"\n{user_context}")

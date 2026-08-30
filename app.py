@@ -834,6 +834,28 @@ def _can_touch_patch(patch: dict | None, username: str, role: str) -> tuple[bool
         return False, "无权操作该补丁"
     return True, ""
 
+@app.post("/v1/workspaces/<workspace_id>/tasks/<task_id>/status")
+@require_auth
+def task_update_status(workspace_id: str, task_id: str):
+    """看板手动切换任务状态：走 RealityPatch 状态机，创建后立即自动确认，保留可回滚的审计记录。"""
+    username = g.current_user["username"]
+    role = g.current_user.get("role", "user")
+    ws = _resolve_user_workspace(workspace_id)
+    if not _can_access_workspace(ws, username, role):
+        return jsonify({"error": "无权访问该工作区", "code": "FORBIDDEN"}), 403
+    payload = request.get_json(silent=True) or {}
+    status = str(payload.get("status") or "").strip()
+    if status not in ("todo", "in_progress", "blocked", "done"):
+        return jsonify({"error": "status must be one of todo/in_progress/blocked/done"}), 400
+    patch = agent.secretary.create_patch(
+        ws, "task", task_id, "update", status, evidence="看板手动切换状态", created_by=username
+    )
+    try:
+        return jsonify(agent.confirm_patch(patch["id"], username))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 409
+
+
 @app.post("/v1/patches/<patch_id>/confirm")
 @require_auth
 def patch_confirm(patch_id: str):
