@@ -327,7 +327,7 @@ def admin_user_profile(target_user: str):
 
 
 @app.get("/v1/admin/settings")
-@require_admin
+@require_auth
 def admin_get_settings():
     """读取当前生效的服务配置（密钥脱敏）。"""
     settings = runtime_settings.effective()
@@ -347,7 +347,7 @@ def admin_get_settings():
 
 
 @app.put("/v1/admin/settings")
-@require_admin
+@require_auth
 def admin_put_settings():
     """保存服务配置并立即热更新生效。"""
     payload = request.get_json(silent=True) or {}
@@ -364,7 +364,7 @@ def admin_put_settings():
 
 
 @app.post("/v1/admin/settings/test")
-@require_admin
+@require_auth
 def admin_test_settings():
     """测试指定服务连通性（不强制持久化）。"""
     import urllib.error

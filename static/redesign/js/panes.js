@@ -786,7 +786,7 @@
 
     function setVal(id, val) { const n = el(id); if (n) n.value = val; }
     async function loadAdminSettings() {
-      if (!state.currentUser || state.currentUser.role !== 'admin') return;
+      if (!state.currentUser) return;
       try {
         const resp = await fetch('/v1/admin/settings', { headers: authHeaders() });
         const data = await resp.json();
@@ -833,7 +833,7 @@
     }
 
     async function saveAdminSettings() {
-      if (!state.currentUser || state.currentUser.role !== 'admin') return;
+      if (!state.currentUser) return;
       const payload = collectSettingsPayload();
       try {
         const resp = await fetch('/v1/admin/settings', {
@@ -855,7 +855,7 @@
     }
 
     async function testSetting(target) {
-      if (!state.currentUser || state.currentUser.role !== 'admin') return;
+      if (!state.currentUser) return;
       el('settingsTestOut').textContent = `正在测试 ${target} ...`;
       try {
         const resp = await fetch('/v1/admin/settings/test', {

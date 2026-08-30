@@ -373,13 +373,13 @@
       showEl('logoutBtn');
       el('authDisplayName').textContent = user.nickname || user.username;
       const badge = el('authRoleBadge');
+      showEl('tabBtn-settings');
       if (user.role === 'admin') {
         badge.textContent = '管理员';
         badge.classList.add('admin');
         showEl('adminUserSwitcher');
         showEl('adminConsoleBtn');
         showEl('adminPortraitPanel');
-        showEl('tabBtn-settings');
         loadAdminUsers();
       } else {
         badge.textContent = '普通用户';
@@ -387,7 +387,6 @@
         hideEl('adminUserSwitcher');
         hideEl('adminConsoleBtn');
         hideEl('adminPortraitPanel');
-        hideEl('tabBtn-settings');
       }
       updateMemoryUser();
       loadPersonalityProfile();
