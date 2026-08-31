@@ -15,6 +15,9 @@ class TestBugFixes(unittest.TestCase):
         self.old_data_dir = os.environ.get("MYAGENT_DATA_DIR")
         os.environ["MYAGENT_DATA_DIR"] = self.temp_dir
         self.app = app.test_client()
+        self.app.post("/v1/auth/register", json={"username": "fixes_tester", "password": "secret1"})
+        login = self.app.post("/v1/auth/login", json={"username": "fixes_tester", "password": "secret1"})
+        self.auth_headers = {"Authorization": f"Bearer {login.get_json()['token']}"}
 
     def tearDown(self):
         if self.old_data_dir is not None:
@@ -29,6 +32,7 @@ class TestBugFixes(unittest.TestCase):
             "/v1/library/documents",
             data={"file": (b"dummy binary", "invalid_file.exe")},
             content_type="multipart/form-data",
+            headers=self.auth_headers,
         )
         self.assertEqual(response.status_code, 400)
         data = response.get_json()

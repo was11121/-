@@ -252,6 +252,15 @@ class SecretaryService:
             proposed_change = row["proposed_change"]
             project_id = row["project_id"]
             rollback_info: dict[str, Any] = {"previous_status": "draft", "target_type": target_type, "operation": operation}
+            # 先原子性地把补丁从 draft 抢占为 applied：WHERE status='draft' 保证并发下
+            # 只有一个请求能抢到（SQLite 写操作互斥），rowcount=0 说明已被并发确认过，
+            # 直接失败退出，不再执行下面任何一次性的实体写入，避免同一补丁被重复应用。
+            claimed = conn.execute(
+                "UPDATE patches SET status='applied', confirmed_by=?, updated_at=? WHERE id=? AND status='draft'",
+                (actor, now, patch_id),
+            )
+            if claimed.rowcount == 0:
+                raise ValueError("patch is missing or not confirmable")
 
             # 执行实体补丁逻辑
             if target_type == "task":
@@ -281,7 +290,7 @@ class SecretaryService:
                         self._audit(conn, project_id, "task_deleted_by_patch", target_id, actor, {"patch_id": patch_id})
 
             rollback_data = json.dumps(rollback_info, ensure_ascii=False)
-            conn.execute("UPDATE patches SET status='applied', confirmed_by=?, rollback_data=?, updated_at=? WHERE id=?", (actor, rollback_data, now, patch_id))
+            conn.execute("UPDATE patches SET rollback_data=? WHERE id=?", (rollback_data, patch_id))
             self._audit(conn, row["project_id"], "patch_applied", patch_id, actor, {"operation": row["operation"], "rollback_info": rollback_info})
             conn.commit()
             return dict(conn.execute("SELECT * FROM patches WHERE id=?", (patch_id,)).fetchone())
@@ -295,6 +304,13 @@ class SecretaryService:
             if not row or row["status"] != "applied":
                 raise ValueError("patch is not applied")
             now = _now()
+            # 同 confirm_patch：先原子性抢占 status，避免并发重复回滚同一补丁。
+            claimed = conn.execute(
+                "UPDATE patches SET status='rolled_back', updated_at=? WHERE id=? AND status='applied'",
+                (now, patch_id),
+            )
+            if claimed.rowcount == 0:
+                raise ValueError("patch is not applied")
             rollback_info = {}
             if row["rollback_data"]:
                 try:
@@ -324,7 +340,6 @@ class SecretaryService:
                     )
                     self._audit(conn, row["project_id"], "task_rolled_back", prev["id"], actor, {"patch_id": patch_id})
 
-            conn.execute("UPDATE patches SET status='rolled_back', updated_at=? WHERE id=?", (now, patch_id))
             self._audit(conn, row["project_id"], "patch_rolled_back", patch_id, actor, {})
             conn.commit()
             return dict(conn.execute("SELECT * FROM patches WHERE id=?", (patch_id,)).fetchone())

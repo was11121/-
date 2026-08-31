@@ -156,7 +156,14 @@ class LocalLibrary:
         self._save_index(records)
         return {"status": "indexed", "document": asdict(document)}
 
-    def search_library(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
+    def search_library(
+        self,
+        query: str,
+        limit: int = 5,
+        *,
+        user_id: str | None = None,
+        include_all: bool = False,
+    ) -> list[dict[str, Any]]:
         q_str = (query or "").lower().strip()
         # 提取英文单词/数字和中文字符/二元组分词，提升多语言检索与长句匹配召回率
         eng_tokens = re.findall(r"[a-z0-9]+", q_str)
@@ -164,8 +171,16 @@ class LocalLibrary:
         cn_bigrams = [cn_chars[i] + cn_chars[i + 1] for i in range(len(cn_chars) - 1)]
         tokens = set(eng_tokens + cn_chars + cn_bigrams)
 
+        candidates = self._load_index()
+        if not include_all:
+            uid = (user_id or "").strip()
+            candidates = [
+                item for item in candidates
+                if self._owned_by_user(item, uid) or not (item.get("tags") or [])
+            ]
+
         scored: list[tuple[float, dict[str, Any]]] = []
-        for item in self._load_index():
+        for item in candidates:
             if item.get("status") != "active":
                 continue
             content = item.get("content", "")

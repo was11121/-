@@ -126,7 +126,7 @@ class UnifiedAgent:
             user_context = (user_context + "\n\n" if user_context else "") + personality_profile["prompt_block"]
         library_results = []
         if self._looks_like_library_request(interaction.message):
-            library_results = self.library.search_library(interaction.message, limit=5)
+            library_results = self.library.search_library(interaction.message, limit=5, user_id=interaction.user_id)
         library_context = "\n".join(f"[{item['title']}] {item['snippet']}" for item in library_results)
 
         # ---- 联网：识别意图 -> 搜索结果 -> 上下文/引用 ----
@@ -335,8 +335,8 @@ class UnifiedAgent:
     def ingest_document(self, filename: str, content: bytes | str, source: str = "upload", tags: list[str] | None = None) -> dict:
         return self.library.ingest_document(filename, content, source=source, tags=tags)
 
-    def search_library(self, query: str, limit: int = 5) -> list[dict]:
-        return self.library.search_library(query, limit)
+    def search_library(self, query: str, limit: int = 5, *, user_id: str | None = None, include_all: bool = False) -> list[dict]:
+        return self.library.search_library(query, limit, user_id=user_id, include_all=include_all)
 
     def web_search(self, query: str, limit: int = 5) -> dict:
         return self.web.search(query, limit=limit)

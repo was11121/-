@@ -1,6 +1,7 @@
 """现实补丁 Agent 的 Web 和 QQ 统一入口，支持多租户认证与数据隔离。"""
 from __future__ import annotations
 import functools
+import hmac
 import json
 import os
 from datetime import datetime, timezone
@@ -642,41 +643,53 @@ def admin_audit_list():
 # 知识库与项目秘书相关接口
 # ----------------------------------------------------------------------
 @app.post("/v1/library/documents")
+@require_auth
 def library_documents():
     upload = request.files.get("file")
-    current = get_current_user()
-    owner_tag = f"user:{current['username']}" if current else None
+    current = g.current_user
+    owner_tag = f"user:{current['username']}"
     if upload:
         try:
-            tags = [owner_tag] if owner_tag else None
-            return jsonify(agent.ingest_document(upload.filename or "uploaded_file", upload.read(), source=request.form.get("source", "upload"), tags=tags))
+            return jsonify(agent.ingest_document(upload.filename or "uploaded_file", upload.read(), source=request.form.get("source", "upload"), tags=[owner_tag]))
         except (ValueError, RuntimeError, Exception) as exc:
             return jsonify({"error": str(exc)}), 400
     payload = request.get_json(silent=True) or {}
     try:
         content = payload.get("content", "")
-        tags = list(payload.get("tags") or [])
-        if owner_tag and owner_tag not in tags:
+        # 客户端不允许自行声明 user:xxx 归属标签，防止伪造他人所有权
+        tags = [t for t in (payload.get("tags") or []) if not str(t).startswith("user:")]
+        if owner_tag not in tags:
             tags.append(owner_tag)
-        return jsonify(agent.ingest_document(str(payload.get("filename") or "document.txt"), content, source=str(payload.get("source") or "api"), tags=tags or None))
+        return jsonify(agent.ingest_document(str(payload.get("filename") or "document.txt"), content, source=str(payload.get("source") or "api"), tags=tags))
     except (ValueError, RuntimeError, Exception) as exc:
         return jsonify({"error": str(exc)}), 400
 @app.get("/v1/library/documents")
+@require_auth
 def library_list():
-    current = get_current_user()
-    if current and current.get("role") != "admin":
+    current = g.current_user
+    if current.get("role") == "admin":
+        records = agent.library._load_index()
+    else:
         records = agent.library.documents_for_user(current["username"], include_untagged=False)
         extra = agent.library.documents_for_user(current.get("id") or "", include_untagged=False)
         seen = {r.get("document_id") for r in records}
         for item in extra:
             if item.get("document_id") not in seen:
                 records.append(item)
-    else:
-        records = agent.library._load_index()
     return jsonify({"documents": records})
 @app.get("/v1/library/search")
+@require_auth
 def library_search():
-    return jsonify({"results": agent.search_library(request.args.get("q", ""), int(request.args.get("limit", 10)))})
+    current = g.current_user
+    include_all = current.get("role") == "admin"
+    uid = None if include_all else current.get("username")
+    results = agent.search_library(
+        request.args.get("q", ""),
+        int(request.args.get("limit", 10)),
+        user_id=uid,
+        include_all=include_all,
+    )
+    return jsonify({"results": results})
 
 
 # ----------------------------------------------------------------------
@@ -882,6 +895,15 @@ def patch_rollback(patch_id: str):
         return jsonify({"error": str(exc)}), 409
 @app.post("/qq")
 def qq_webhook():
+    """OneBot 风格 webhook 参考实现。必须配置 QQ_WEBHOOK_SECRET 后才会接受请求，
+    否则任何人都能自称任意 user_id 读写该身份的记忆与秘书数据；未配置时直接拒绝，
+    不做"默认开放"的不安全兜底。"""
+    secret = (os.getenv("QQ_WEBHOOK_SECRET") or "").strip()
+    if not secret:
+        return jsonify({"error": "QQ webhook 未配置 QQ_WEBHOOK_SECRET，已禁用", "code": "WEBHOOK_DISABLED"}), 403
+    provided = request.headers.get("X-Webhook-Secret", "") or request.args.get("secret", "")
+    if not hmac.compare_digest(provided, secret):
+        return jsonify({"error": "invalid webhook secret", "code": "FORBIDDEN"}), 403
     payload = request.get_json(silent=True) or {}
     if payload.get("post_type") != "message":
         return jsonify({"status": "ignored"})

@@ -250,8 +250,10 @@ class WebSearchService:
     def _jina_read(self, url: str, via_relay: bool) -> dict[str, Any]:
         target = f"{DEFAULT_JINA_READER}/{url}"
         if via_relay:
+            # url 来自用户对话文本，未经转义直接拼进 shell 命令会导致远端命令注入；
+            # 用 shlex.quote 做 POSIX shell 安全转义（与 _tavily_relay 走 stdin 传参同一防护思路）。
             out, err = self._relay_command(
-                f"curl -s -m 30 '{target}' | head -c 6000"
+                f"curl -s -m 30 {shlex.quote(target)} | head -c 6000"
             )
             if err:
                 return {"content": "", "error": err.strip()[:200]}
